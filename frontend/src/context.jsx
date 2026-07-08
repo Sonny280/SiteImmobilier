@@ -143,7 +143,7 @@ export function Provider({ children }) {
   },[]);
 
   const loadAdmin = useCallback(async()=>{
-    if(!token||!online) return;
+    if(!online) return;
     try {
       const [c,l,v,d,ct,vi] = await Promise.all([
         api("GET","/clients"),api("GET","/loyers"),api("GET","/ventes"),
@@ -152,9 +152,9 @@ export function Provider({ children }) {
       if(c)setClients(c); if(l)setLoyers(l); if(v)setVentes(v);
       if(d)setDemandes(d); if(ct)setContrats(ct); if(vi)setVisites(vi);
     } catch(e) { showToast(e.message,"warn"); }
-  },[api,token,online,showToast]);
+  },[api,online,showToast]);
 
-  useEffect(()=>{ if(token&&page==="admin") loadAdmin(); },[token,page]);
+  useEffect(()=>{ if(page==="admin") loadAdmin(); },[page]);
 
   // Récupère le profil courant dès qu'un token est disponible.
   // Restaurer la session au chargement — le cookie HttpOnly est envoyé

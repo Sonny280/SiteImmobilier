@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a2358"/>
+      <stop offset="100%" stop-color="#1440a0"/>
+    </linearGradient>
+  </defs>
+  <!-- Fond arrondi -->
+  <rect width="200" height="60" rx="12" fill="url(#bg)"/>
+  <!-- Icône maison stylisée -->
+  <g transform="translate(12,10)">
+    <!-- Toit -->
+    <polygon points="20,4 36,16 4,16" fill="#c29437"/>
+    <!-- Mur -->
+    <rect x="8" y="16" width="24" height="18" rx="1" fill="white" opacity="0.9"/>
+    <!-- Porte -->
+    <rect x="16" y="24" width="8" height="10" rx="1" fill="#0a2358"/>
+    <!-- Fenêtre gauche -->
+    <rect x="10" y="18" width="5" height="5" rx="0.5" fill="#c29437" opacity="0.8"/>
+    <!-- Fenêtre droite -->
+    <rect x="25" y="18" width="5" height="5" rx="0.5" fill="#c29437" opacity="0.8"/>
+  </g>
+  <!-- Texte ImmobilierCI -->
+  <text x="56" y="26" font-family="Georgia,serif" font-weight="700" font-size="16" fill="white" letter-spacing="-0.3">Immobilier</text>
+  <text x="56" y="44" font-family="Georgia,serif" font-weight="900" font-size="18" fill="#c29437" letter-spacing="0.5">CI</text>
+  <!-- Ligne décorative dorée -->
+  <rect x="56" y="48" width="120" height="2" rx="1" fill="#c29437" opacity="0.4"/>
+</svg>

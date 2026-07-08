@@ -146,7 +146,7 @@ export function AdminUsers() {
   };
 
   useEffect(()=>{
-    if(!token || !userReady) return;
+    if(!userReady) return;
     if(isSuperAdmin) load();
     else setLoading(false);
   },[userReady, isSuperAdmin]);

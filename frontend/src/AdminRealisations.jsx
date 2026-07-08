@@ -23,7 +23,7 @@ export function AdminRealisations() {
     setItems(Array.isArray(d) ? d : []);
     setLoading(false);
   };
-  useEffect(() => { if(token) load(); }, [token]);
+  useEffect(() => { load(); }, [token]);
 
   const openNew  = ()=>{ setForm(empty); setErr(""); setModal("new"); };
   const openEdit = (item)=>{ setForm({...item}); setErr(""); setModal(item); };

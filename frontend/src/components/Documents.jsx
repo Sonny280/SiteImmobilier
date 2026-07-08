@@ -48,7 +48,7 @@ export function DocumentsPanel({ entite, entiteId, titre }) {
       setDocs(await r.json());
     } finally { setLoading(false); }
   };
-  useEffect(() => { if(token&&entiteId) load(); }, [entiteId]);
+  useEffect(() => { if(entiteId) load(); }, [entiteId]);
 
   const handleUpload = async (e) => {
     const files = Array.from(e.target.files||[]);

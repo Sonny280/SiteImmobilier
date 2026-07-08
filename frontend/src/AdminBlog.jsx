@@ -175,7 +175,7 @@ export function AdminBlog() {
     } finally { setLoading(false); }
   };
 
-  useEffect(()=>{ if(token) load(); },[token]);
+  useEffect(()=>{ load(); },[token]);
 
   const togglePublish = async (a) => {
     const res = await fetch(`${API}/articles/${a.id}/publier`, {

@@ -16,7 +16,7 @@ export function AdminTemoignages() {
     setItems(Array.isArray(d) ? d : []);
     setLoading(false);
   };
-  useEffect(() => { if (token) load(); }, [token]);
+  useEffect(() => { load(); }, [token]);
 
   const setStatut = async (id, statut) => {
     const r = await fetch(`${API}/temoignages/${id}/statut`, {
