@@ -93,10 +93,11 @@ app.use((err,req,res,_)=>{
 });
 
 initDb().then(()=>{
-  app.listen(PORT,()=>{
+  app.listen(PORT, "0.0.0.0", ()=>{
     console.log(`✅  ImmobilierCI API  →  http://localhost:${PORT}`);
     console.log(`📁  Photos  →  http://localhost:${PORT}/uploads`);
     if (isProd) console.log(`🔒  HTTPS forcé (NODE_ENV=production)`);
     else console.log(`⚠️  NODE_ENV n'est pas "production" — HTTPS non forcé. Mettez NODE_ENV=production sur votre hébergement.`);
   });
 }).catch(e=>{console.error("❌",e.message);process.exit(1);});
+
