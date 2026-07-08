@@ -5,47 +5,47 @@ const {auth,requireModule}=require("../middleware/auth");
 
 const ETAPES=["prospect","offre","compromis","financement","acte","finalisee"];
 
-function withDetails(v){
+async function withDetails(v) {
   if(!v) return null;
-  const bien=prepare("SELECT id,titre,ref,commune,quartier,prix FROM biens WHERE id=?").get(v.bienId);
-  const paies=prepare("SELECT * FROM paiements_vente WHERE venteId=? ORDER BY date DESC").all(v.id);
+  const bien=await prepare("SELECT id,titre,ref,commune,quartier,prix FROM biens WHERE id=?").get(v.bienId);
+  const paies=await prepare("SELECT * FROM paiements_vente WHERE venteId=? ORDER BY date DESC").all(v.id);
   const totalPaye=paies.reduce((s,p)=>s+p.montant,0);
   const commission=v.prixFinal?Math.round(v.prixFinal*(v.tauxCommission||5)/100):(v.commission||0);
   return {...v,bien,paiements:paies,totalPaye,commission,resteAPayer:Math.max(0,(v.prixFinal||0)-totalPaye)};
 }
 
-router.get("/",auth,(req,res)=>{
+router.get("/",auth, async (req, res) =>{
   const {statut}=req.query;
   let sql="SELECT * FROM ventes WHERE 1=1";
   const p=[];
   if(statut&&statut!=="all"){sql+=" AND statut=?";p.push(statut);}
   sql+=" ORDER BY createdAt DESC";
-  res.json(prepare(sql).all(...p).map(withDetails));
+  res.json(await prepare(sql).all(...p).map(withDetails));
 });
 
-router.get("/stats",auth,(_, res)=>{
-  res.json({total:prepare("SELECT COUNT(*) as c FROM ventes").get().c,encours:prepare("SELECT COUNT(*) as c FROM ventes WHERE statut NOT IN ('finalisee','annulee')").get().c,finalisees:prepare("SELECT COUNT(*) as c FROM ventes WHERE statut='finalisee'").get().c,caFin:prepare("SELECT SUM(prixFinal) as s FROM ventes WHERE statut='finalisee'").get()?.s||0,commissions:prepare("SELECT SUM(commission) as s FROM ventes WHERE statut='finalisee'").get()?.s||0});
+router.get("/stats",auth,async (_, res) => {
+  res.json({total:await prepare("SELECT COUNT(*) as c FROM ventes").get().c,encours:await prepare("SELECT COUNT(*) as c FROM ventes WHERE statut NOT IN ('finalisee','annulee')").get().c,finalisees:await prepare("SELECT COUNT(*) as c FROM ventes WHERE statut='finalisee'").get().c,caFin:await prepare("SELECT SUM(prixFinal) as s FROM ventes WHERE statut='finalisee'").get()?.s||0,commissions:await prepare("SELECT SUM(commission) as s FROM ventes WHERE statut='finalisee'").get()?.s||0});
 });
 
-router.get("/:id",auth,(req,res)=>{
-  const v=prepare("SELECT * FROM ventes WHERE id=?").get(+req.params.id);
+router.get("/:id",auth, async (req, res) =>{
+  const v=await prepare("SELECT * FROM ventes WHERE id=?").get(+req.params.id);
   if(!v) return res.status(404).json({error:"Vente introuvable"});
-  res.json(withDetails(v));
+  res.json(await withDetails(v));
 });
 
-router.post("/",auth,requireModule("ventes"),(req,res)=>{
+router.post("/",auth,requireModule("ventes"),async (req,res)=>{
   const {bienId,acheteurId,acheteurNom,acheteurTel,acheteurEmail,vendeurNom,vendeurTel,prixAffiche,prixNegociation,tauxCommission,modeFinancement,banque,notes}=req.body;
   if(!bienId||!prixAffiche) return res.status(400).json({error:"bienId et prixAffiche requis"});
-  const count=prepare("SELECT COUNT(*) as c FROM ventes").get().c;
+  const count=await prepare("SELECT COUNT(*) as c FROM ventes").get().c;
   const ref=`VTE-${new Date().getFullYear()}-${String(count+1).padStart(3,"0")}`;
-  const r=prepare("INSERT INTO ventes (ref,bienId,acheteurId,acheteurNom,acheteurTel,acheteurEmail,vendeurNom,vendeurTel,prixAffiche,prixNegociation,tauxCommission,modeFinancement,banque,notes,statut) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'prospect')").run(ref,+bienId,acheteurId||null,acheteurNom||"",acheteurTel||"",acheteurEmail||"",vendeurNom||"",vendeurTel||"",+prixAffiche,prixNegociation||null,tauxCommission||5,modeFinancement||"cash",banque||"",notes||"");
-  prepare("UPDATE biens SET statut='en_cours' WHERE id=?").run(+bienId);
-  res.status(201).json(withDetails(prepare("SELECT * FROM ventes WHERE id=?").get(r.lastInsertRowid)));
+  const r=await prepare("INSERT INTO ventes (ref,bienId,acheteurId,acheteurNom,acheteurTel,acheteurEmail,vendeurNom,vendeurTel,prixAffiche,prixNegociation,tauxCommission,modeFinancement,banque,notes,statut) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'prospect')").run(ref,+bienId,acheteurId||null,acheteurNom||"",acheteurTel||"",acheteurEmail||"",vendeurNom||"",vendeurTel||"",+prixAffiche,prixNegociation||null,tauxCommission||5,modeFinancement||"cash",banque||"",notes||"");
+  await prepare("UPDATE biens SET statut='en_cours' WHERE id=?").run(+bienId);
+  res.status(201).json(await withDetails(await prepare("SELECT * FROM ventes WHERE id=?").get(r.lastInsertRowid)));
 });
 
-router.put("/:id",auth,requireModule("ventes"),(req,res)=>{
+router.put("/:id",auth,requireModule("ventes"),async (req,res)=>{
   const id=+req.params.id;
-  const curr=prepare("SELECT * FROM ventes WHERE id=?").get(id);
+  const curr=await prepare("SELECT * FROM ventes WHERE id=?").get(id);
   if(!curr) return res.status(404).json({error:"Vente introuvable"});
   const ns=req.body.statut||curr.statut;
   const pf=req.body.prixFinal||curr.prixFinal;
@@ -61,18 +61,18 @@ router.put("/:id",auth,requireModule("ventes"),(req,res)=>{
   const comm=pf?Math.round(pf*(tc/100)):(req.body.commission||curr.commission||0);
   // Bloque le passage à "finalisee" si le montant payé n'a pas atteint le prix final.
   if(ns==="finalisee" && pf){
-    const dejaVerse = prepare("SELECT SUM(montant) as s FROM paiements_vente WHERE venteId=?").get(id)?.s||0;
+    const dejaVerse = await prepare("SELECT SUM(montant) as s FROM paiements_vente WHERE venteId=?").get(id)?.s||0;
     if(dejaVerse<pf) return res.status(400).json({error:`Impossible de finaliser : il reste ${(pf-dejaVerse).toLocaleString("fr-CI")} FCFA à encaisser.`});
   }
-  prepare("UPDATE ventes SET statut=?,prixFinal=?,prixNegociation=?,dateOffre=?,montantOffre=?,dateCompromis=?,dateActe=?,notaire=?,commission=?,tauxCommission=?,modeFinancement=?,banque=?,titreVerifie=?,diagnosticFait=?,notes=?,updatedAt=datetime('now') WHERE id=?").run(ns,pf||null,pn,req.body.dateOffre||curr.dateOffre,req.body.montantOffre||curr.montantOffre,req.body.dateCompromis||curr.dateCompromis,req.body.dateActe||curr.dateActe,req.body.notaire||curr.notaire,comm,tc,req.body.modeFinancement||curr.modeFinancement,req.body.banque||curr.banque,req.body.titreVerifie!==undefined?req.body.titreVerifie:curr.titreVerifie,req.body.diagnosticFait!==undefined?req.body.diagnosticFait:curr.diagnosticFait,req.body.notes||curr.notes,id);
-  if(ns==="finalisee") prepare("UPDATE biens SET statut='vendu' WHERE id=?").run(curr.bienId);
-  if(ns==="annulee"&&curr.statut!=="finalisee") prepare("UPDATE biens SET statut='disponible' WHERE id=?").run(curr.bienId);
-  res.json(withDetails(prepare("SELECT * FROM ventes WHERE id=?").get(id)));
+  await prepare("UPDATE ventes SET statut=?,prixFinal=?,prixNegociation=?,dateOffre=?,montantOffre=?,dateCompromis=?,dateActe=?,notaire=?,commission=?,tauxCommission=?,modeFinancement=?,banque=?,titreVerifie=?,diagnosticFait=?,notes=?,updatedAt=datetime('now') WHERE id=?").run(ns,pf||null,pn,req.body.dateOffre||curr.dateOffre,req.body.montantOffre||curr.montantOffre,req.body.dateCompromis||curr.dateCompromis,req.body.dateActe||curr.dateActe,req.body.notaire||curr.notaire,comm,tc,req.body.modeFinancement||curr.modeFinancement,req.body.banque||curr.banque,req.body.titreVerifie!==undefined?req.body.titreVerifie:curr.titreVerifie,req.body.diagnosticFait!==undefined?req.body.diagnosticFait:curr.diagnosticFait,req.body.notes||curr.notes,id);
+  if(ns==="finalisee") await prepare("UPDATE biens SET statut='vendu' WHERE id=?").run(curr.bienId);
+  if(ns==="annulee"&&curr.statut!=="finalisee") await prepare("UPDATE biens SET statut='disponible' WHERE id=?").run(curr.bienId);
+  res.json(await withDetails(await prepare("SELECT * FROM ventes WHERE id=?").get(id)));
 });
 
-router.post("/:id/paiements",auth,requireModule("ventes"),(req,res)=>{
+router.post("/:id/paiements",auth,requireModule("ventes"),async (req,res)=>{
   const venteId=+req.params.id;
-  const v=prepare("SELECT * FROM ventes WHERE id=?").get(venteId);
+  const v=await prepare("SELECT * FROM ventes WHERE id=?").get(venteId);
   if(!v) return res.status(404).json({error:"Vente introuvable"});
   const {montant,type,date,modePaiement,reference,notes}=req.body;
   if(!montant||!date) return res.status(400).json({error:"montant et date requis"});
@@ -82,18 +82,18 @@ router.post("/:id/paiements",auth,requireModule("ventes"),(req,res)=>{
   // interface (facilement contournable via un appel API direct) — elle est
   // désormais appliquée ici, qui est la seule barrière fiable.
   if(v.prixFinal){
-    const dejaVerse = prepare("SELECT SUM(montant) as s FROM paiements_vente WHERE venteId=?").get(venteId)?.s||0;
+    const dejaVerse = await prepare("SELECT SUM(montant) as s FROM paiements_vente WHERE venteId=?").get(venteId)?.s||0;
     const resteAPayer = v.prixFinal - dejaVerse;
     if(+montant>resteAPayer) return res.status(400).json({error:`Le montant dépasse le reste à payer (${resteAPayer.toLocaleString("fr-CI")} FCFA).`});
   }
-  prepare("INSERT INTO paiements_vente (venteId,montant,type,date,modePaiement,reference,notes) VALUES (?,?,?,?,?,?,?)").run(venteId,+montant,type||"acompte",date,modePaiement||"virement",reference||"",notes||"");
-  res.status(201).json(withDetails(prepare("SELECT * FROM ventes WHERE id=?").get(venteId)));
+  await prepare("INSERT INTO paiements_vente (venteId,montant,type,date,modePaiement,reference,notes) VALUES (?,?,?,?,?,?,?)").run(venteId,+montant,type||"acompte",date,modePaiement||"virement",reference||"",notes||"");
+  res.status(201).json(await withDetails(await prepare("SELECT * FROM ventes WHERE id=?").get(venteId)));
 });
 
-router.delete("/:id",auth,requireModule("ventes"),(req,res)=>{
-  const v=prepare("SELECT * FROM ventes WHERE id=?").get(+req.params.id);
-  if(v&&!["finalisee"].includes(v.statut)) prepare("UPDATE biens SET statut='disponible' WHERE id=?").run(v.bienId);
-  prepare("DELETE FROM ventes WHERE id=?").run(+req.params.id);
+router.delete("/:id",auth,requireModule("ventes"),async (req,res)=>{
+  const v=await prepare("SELECT * FROM ventes WHERE id=?").get(+req.params.id);
+  if(v&&!["finalisee"].includes(v.statut)) await prepare("UPDATE biens SET statut='disponible' WHERE id=?").run(v.bienId);
+  await prepare("DELETE FROM ventes WHERE id=?").run(+req.params.id);
   res.json({success:true});
 });
 

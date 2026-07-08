@@ -6,9 +6,9 @@ const bcrypt = require("bcryptjs");
 
 async function init() {
   await initDb();
-  const exists = prepare("SELECT id FROM users WHERE role='superadmin' LIMIT 1").get();
+  const exists = await prepare("SELECT id FROM users WHERE role='superadmin' LIMIT 1").get();
   if (!exists) {
-    prepare("INSERT INTO users(nom,email,password,role)VALUES(?,?,?,?)")
+    await prepare("INSERT INTO users(nom,email,password,role)VALUES(?,?,?,?)")
       .run(
         "Kouassi Atse Charles",
         "contact@immobilierci.ci",

@@ -7,7 +7,7 @@ const { notifLoyerPaye } = require("../config/whatsapp");
 const { sendQuittance, sendRelanceLoyer } = require("../config/email");
 
 // Calcul retard SANS pénalité
-function enrich(l) {
+async function enrich(l) {
   if (!l) return null;
   let joursRetard = 0;
   if (l.statut !== "paye" && l.echeance) {
@@ -29,7 +29,7 @@ const BASE_SQL = `
 `;
 
 // GET /api/loyers
-router.get("/", auth, (req, res) => {
+router.get("/", auth, async (req, res) => {
   const { mois, statut, clientId, bienId } = req.query;
   let sql = BASE_SQL + " WHERE 1=1";
   const p = [];
@@ -38,55 +38,55 @@ router.get("/", auth, (req, res) => {
   if (clientId) { sql += " AND l.clientId=?"; p.push(+clientId); }
   if (bienId)   { sql += " AND l.bienId=?";   p.push(+bienId); }
   sql += " ORDER BY l.mois DESC, l.echeance ASC";
-  res.json(prepare(sql).all(...p).map(enrich));
+  res.json(await prepare(sql).all(...p).map(enrich));
 });
 
 // GET /api/loyers/retards — loyers en retard
-router.get("/retards", auth, (_, res) => {
+router.get("/retards", auth, async (_, res) => {
   const today = new Date().toISOString().split("T")[0];
-  res.json(prepare(BASE_SQL + " WHERE l.statut IN ('impaye','en_attente') AND l.echeance < ? ORDER BY l.echeance ASC").all(today).map(enrich));
+  res.json(await prepare(BASE_SQL + " WHERE l.statut IN ('impaye','en_attente') AND l.echeance < ? ORDER BY l.echeance ASC").all(today).map(enrich));
 });
 
 // GET /api/loyers/stats — statistiques globales
-router.get("/stats", auth, (_, res) => {
+router.get("/stats", auth, async (_, res) => {
   const mois  = new Date().toISOString().slice(0,7);
   const today = new Date().toISOString().split("T")[0];
   res.json({
-    totalMois:   prepare("SELECT SUM(montant) as s FROM loyers WHERE mois=?").get(mois)?.s||0,
-    payeMois:    prepare("SELECT SUM(montant) as s FROM loyers WHERE mois=? AND statut='paye'").get(mois)?.s||0,
-    nbRetards:   prepare("SELECT COUNT(*) as c FROM loyers WHERE statut IN ('impaye','en_attente') AND echeance < ?").get(today).c,
-    nbImpaye:    prepare("SELECT COUNT(*) as c FROM loyers WHERE statut='impaye'").get().c,
-    montRetards: prepare("SELECT SUM(montant) as s FROM loyers WHERE statut IN ('impaye','en_attente') AND echeance < ?").get(today)?.s||0,
+    totalMois:   await prepare("SELECT SUM(montant) as s FROM loyers WHERE mois=?").get(mois)?.s||0,
+    payeMois:    await prepare("SELECT SUM(montant) as s FROM loyers WHERE mois=? AND statut='paye'").get(mois)?.s||0,
+    nbRetards:   await prepare("SELECT COUNT(*) as c FROM loyers WHERE statut IN ('impaye','en_attente') AND echeance < ?").get(today).c,
+    nbImpaye:    await prepare("SELECT COUNT(*) as c FROM loyers WHERE statut='impaye'").get().c,
+    montRetards: await prepare("SELECT SUM(montant) as s FROM loyers WHERE statut IN ('impaye','en_attente') AND echeance < ?").get(today)?.s||0,
   });
 });
 
 // POST /api/loyers
-router.post("/", auth, requireModule("loyers"), (req, res) => {
+router.post("/", auth, requireModule("loyers"), async (req, res) => {
   const { clientId, bienId, montant, mois, echeance, statut, modePaiement, notes } = req.body;
   if (!clientId||!bienId||!montant||!mois)
     return res.status(400).json({ error: "clientId, bienId, montant, mois requis" });
-  const r = prepare(`
+  const r = await prepare(`
     INSERT INTO loyers (clientId,bienId,montant,mois,echeance,statut,modePaiement,notes)
     VALUES (?,?,?,?,?,?,?,?)
   `).run(+clientId, +bienId, +montant, mois, echeance||null, statut||"en_attente", modePaiement||"virement", notes||null);
-  res.status(201).json(enrich(prepare("SELECT * FROM loyers WHERE id=?").get(r.lastInsertRowid)));
+  res.status(201).json(await enrich(await prepare("SELECT * FROM loyers WHERE id=?").get(r.lastInsertRowid)));
 });
 
 // PUT /api/loyers/:id/payer — marquer payé + envoyer quittance
 router.put("/:id/payer", auth, requireModule("loyers"), async (req, res) => {
   const id = +req.params.id;
   const { modePaiement, montantRecu } = req.body;
-  const loyer = prepare("SELECT * FROM loyers WHERE id=?").get(id);
+  const loyer = await prepare("SELECT * FROM loyers WHERE id=?").get(id);
   if (!loyer) return res.status(404).json({ error: "Loyer introuvable" });
   const today = new Date().toISOString().split("T")[0];
-  prepare("UPDATE loyers SET statut='paye',datePaiement=?,montantRecu=?,modePaiement=?,joursRetard=?,penalite=0 WHERE id=?")
-    .run(today, +montantRecu||loyer.montant, modePaiement||"virement", enrich(loyer).joursRetard, id);
-  const updated = prepare("SELECT * FROM loyers WHERE id=?").get(id);
-  const client  = prepare("SELECT * FROM clients WHERE id=?").get(loyer.clientId);
-  const bien    = prepare("SELECT * FROM biens WHERE id=?").get(loyer.bienId);
+  await prepare("UPDATE loyers SET statut='paye',datePaiement=?,montantRecu=?,modePaiement=?,joursRetard=?,penalite=0 WHERE id=?")
+    .run(today, +montantRecu||loyer.montant, modePaiement||"virement", await enrich(loyer).joursRetard, id);
+  const updated = await prepare("SELECT * FROM loyers WHERE id=?").get(id);
+  const client  = await prepare("SELECT * FROM clients WHERE id=?").get(loyer.clientId);
+  const bien    = await prepare("SELECT * FROM biens WHERE id=?").get(loyer.bienId);
   sendQuittance(updated, client, bien).catch(console.error);
   notifLoyerPaye(updated, client, bien).catch(console.error);
-  res.json(enrich(updated));
+  res.json(await enrich(updated));
 });
 
 // PUT /api/loyers/:id — modification générale (notes, statut impayé/en_attente).
@@ -94,7 +94,7 @@ router.put("/:id/payer", auth, requireModule("loyers"), async (req, res) => {
 // cette route déclenche l'envoi de la quittance et la notification WhatsApp.
 // On bloque ici toute tentative de passer statut="paye" par ce raccourci pour
 // éviter qu'un loyer soit marqué payé sans qu'aucune notification ne parte.
-router.put("/:id", auth, requireModule("loyers"), (req, res) => {
+router.put("/:id", auth, requireModule("loyers"), async (req, res) => {
   const id = +req.params.id;
   const { statut, datePaiement, montantRecu, modePaiement, notes } = req.body;
   if (statut === "paye") {
@@ -102,23 +102,23 @@ router.put("/:id", auth, requireModule("loyers"), (req, res) => {
   }
   const STATUTS_VALIDES = ["en_attente","impaye"];
   if (statut && !STATUTS_VALIDES.includes(statut)) return res.status(400).json({ error: "Statut invalide" });
-  prepare("UPDATE loyers SET statut=COALESCE(?,statut),datePaiement=?,montantRecu=?,modePaiement=?,notes=? WHERE id=?")
+  await prepare("UPDATE loyers SET statut=COALESCE(?,statut),datePaiement=?,montantRecu=?,modePaiement=?,notes=? WHERE id=?")
     .run(statut||null, datePaiement||null, montantRecu||null, modePaiement||"virement", notes||null, id);
-  res.json(enrich(prepare("SELECT * FROM loyers WHERE id=?").get(id)));
+  res.json(await enrich(await prepare("SELECT * FROM loyers WHERE id=?").get(id)));
 });
 
 // POST /api/loyers/:id/relancer — relance WhatsApp ou email (sans pénalité)
 router.post("/:id/relancer", auth, requireModule("loyers"), async (req, res) => {
   const { canal = "whatsapp" } = req.body;
-  const loyer  = prepare("SELECT * FROM loyers WHERE id=?").get(+req.params.id);
+  const loyer  = await prepare("SELECT * FROM loyers WHERE id=?").get(+req.params.id);
   if (!loyer) return res.status(404).json({ error: "Loyer introuvable" });
-  const client = prepare("SELECT * FROM clients WHERE id=?").get(loyer.clientId);
-  const bien   = prepare("SELECT * FROM biens WHERE id=?").get(loyer.bienId);
-  const enriched = enrich(loyer);
+  const client = await prepare("SELECT * FROM clients WHERE id=?").get(loyer.clientId);
+  const bien   = await prepare("SELECT * FROM biens WHERE id=?").get(loyer.bienId);
+  const enriched = await enrich(loyer);
   // Historique relance
-  prepare("INSERT INTO relances (loyerId,clientId,type,canal,date) VALUES (?,?,?,?,?)")
+  await prepare("INSERT INTO relances (loyerId,clientId,type,canal,date) VALUES (?,?,?,?,?)")
     .run(loyer.id, loyer.clientId, "amiable", canal, new Date().toISOString().split("T")[0]);
-  const numRelances = prepare("SELECT COUNT(*) as c FROM relances WHERE loyerId=?").get(loyer.id).c;
+  const numRelances = await prepare("SELECT COUNT(*) as c FROM relances WHERE loyerId=?").get(loyer.id).c;
   if (canal === "email") sendRelanceLoyer(enriched, client, bien, numRelances).catch(console.error);
   const moisFmt = new Date((loyer.mois||"2025-01")+"-01").toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
   const msg = encodeURIComponent(
@@ -129,26 +129,26 @@ router.post("/:id/relancer", auth, requireModule("loyers"), async (req, res) => 
 });
 
 // DELETE /api/loyers/:id
-router.delete("/:id", auth, requireModule("loyers"), (req, res) => {
-  prepare("DELETE FROM loyers WHERE id=?").run(+req.params.id);
+router.delete("/:id", auth, requireModule("loyers"), async (req, res) => {
+  await prepare("DELETE FROM loyers WHERE id=?").run(+req.params.id);
   res.json({ success: true });
 });
 
 // POST /api/loyers/generer-mois — génère les loyers d'un mois pour tous les locataires
-router.post("/generer-mois", auth, requireModule("loyers"), (req, res) => {
+router.post("/generer-mois", auth, requireModule("loyers"), async (req, res) => {
   const { mois } = req.body;
   if (!mois) return res.status(400).json({ error: "mois requis (YYYY-MM)" });
-  const locataires = prepare("SELECT * FROM clients WHERE type='locataire' AND bienId IS NOT NULL AND loyer > 0").all();
+  const locataires = await prepare("SELECT * FROM clients WHERE type='locataire' AND bienId IS NOT NULL AND loyer > 0").all();
   let crees = 0, ignores = 0;
-  locataires.forEach(c => {
-    const existe = prepare("SELECT id FROM loyers WHERE clientId=? AND mois=?").get(c.id, mois);
+  for (const c of locataires) {
+    const existe = await prepare("SELECT id FROM loyers WHERE clientId=? AND mois=?").get(c.id, mois);
     if (!existe) {
       const [y,m] = mois.split("-");
-      prepare("INSERT INTO loyers (clientId,bienId,montant,mois,echeance,statut) VALUES (?,?,?,?,?,'en_attente')")
+      await prepare("INSERT INTO loyers (clientId,bienId,montant,mois,echeance,statut) VALUES (?,?,?,?,?,'en_attente')")
         .run(c.id, c.bienId, c.loyer, mois, `${y}-${m}-01`);
       crees++;
     } else { ignores++; }
-  });
+  }
   res.json({ success:true, crees, ignores, total:locataires.length });
 });
 

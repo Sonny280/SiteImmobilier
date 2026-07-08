@@ -22,17 +22,17 @@ const MAX_SIZE = 10 * 1024 * 1024; // 10 Mo
 const ALLOWED_ENTITES = new Set(["bien","client","vente","contrat","loyer"]);
 
 // GET /api/documents?entite=client&entiteId=1
-router.get("/", auth, (req, res) => {
+router.get("/", auth, async (req, res) => {
   const { entite, entiteId } = req.query;
   if (!entite || !entiteId) return res.status(400).json({ error: "entite et entiteId requis" });
   if (!ALLOWED_ENTITES.has(entite)) return res.status(400).json({ error: "Type d'entité invalide" });
   if (!Number.isInteger(+entiteId)) return res.status(400).json({ error: "entiteId invalide" });
-  res.json(prepare("SELECT id,nom,type,entite,entiteId,taille,mimeType,notes,createdAt FROM documents WHERE entite=? AND entiteId=? ORDER BY createdAt DESC").all(entite, +entiteId));
+  res.json(await prepare("SELECT id,nom,type,entite,entiteId,taille,mimeType,notes,createdAt FROM documents WHERE entite=? AND entiteId=? ORDER BY createdAt DESC").all(entite, +entiteId));
 });
 
 // POST /api/documents — upload base64 (toute écriture nécessite une permission
 // métier sur le module concerné — un rôle "lecture" ne peut rien uploader).
-router.post("/", auth, requireModule("documents"), (req, res) => {
+router.post("/", auth, requireModule("documents"), async (req, res) => {
   const { nom, type, entite, entiteId, fichier, taille, mimeType, notes } = req.body;
   if (!nom || !entite || !entiteId || !fichier) return res.status(400).json({ error: "nom, entite, entiteId, fichier requis" });
   if (!ALLOWED_ENTITES.has(entite)) return res.status(400).json({ error: "Type d'entité invalide" });
@@ -43,14 +43,14 @@ router.post("/", auth, requireModule("documents"), (req, res) => {
   const safeNom = String(nom).replace(/[\r\n"]/g, "_").slice(0, 200);
   const sizeBytes = Buffer.byteLength(fichier, "base64");
   if (sizeBytes > MAX_SIZE) return res.status(400).json({ error: "Fichier trop volumineux (max 10 Mo)" });
-  const r = prepare("INSERT INTO documents (nom,type,entite,entiteId,fichier,taille,mimeType,notes) VALUES (?,?,?,?,?,?,?,?)")
+  const r = await prepare("INSERT INTO documents (nom,type,entite,entiteId,fichier,taille,mimeType,notes) VALUES (?,?,?,?,?,?,?,?)")
     .run(safeNom, type||"autre", entite, +entiteId, fichier, taille||sizeBytes, mimeType, notes||null);
-  res.status(201).json(prepare("SELECT id,nom,type,entite,entiteId,taille,mimeType,notes,createdAt FROM documents WHERE id=?").get(r.lastInsertRowid));
+  res.status(201).json(await prepare("SELECT id,nom,type,entite,entiteId,taille,mimeType,notes,createdAt FROM documents WHERE id=?").get(r.lastInsertRowid));
 });
 
 // GET /api/documents/:id/download — télécharger
-router.get("/:id/download", auth, (req, res) => {
-  const doc = prepare("SELECT * FROM documents WHERE id=?").get(+req.params.id);
+router.get("/:id/download", auth, async (req, res) => {
+  const doc = await prepare("SELECT * FROM documents WHERE id=?").get(+req.params.id);
   if (!doc) return res.status(404).json({ error: "Document introuvable" });
   const buffer = Buffer.from(doc.fichier, "base64");
   // Le Content-Type est revalidé contre la même liste blanche au moment du
@@ -68,10 +68,10 @@ router.get("/:id/download", auth, (req, res) => {
 });
 
 // DELETE /api/documents/:id
-router.delete("/:id", auth, requireModule("documents"), (req, res) => {
-  const doc = prepare("SELECT id FROM documents WHERE id=?").get(+req.params.id);
+router.delete("/:id", auth, requireModule("documents"), async (req, res) => {
+  const doc = await prepare("SELECT id FROM documents WHERE id=?").get(+req.params.id);
   if (!doc) return res.status(404).json({ error: "Document introuvable" });
-  prepare("DELETE FROM documents WHERE id=?").run(+req.params.id);
+  await prepare("DELETE FROM documents WHERE id=?").run(+req.params.id);
   res.json({ success: true });
 });
 

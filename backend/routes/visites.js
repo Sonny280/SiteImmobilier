@@ -5,8 +5,8 @@ const { prepare } = require("../config/database");
 const { auth, requireModule } = require("../middleware/auth");
 const { notifNouvelleVisite } = require("../config/whatsapp");
 
-router.get("/", auth, (req, res) => {
-  const rows = prepare(`
+router.get("/", auth, async (req, res) => {
+  const rows = await prepare(`
     SELECT v.*, b.titre as bienTitre, c.nom as clientNom
     FROM visites v
     LEFT JOIN biens b ON v.bienId = b.id
@@ -19,23 +19,23 @@ router.get("/", auth, (req, res) => {
 router.post("/", auth, requireModule("visites"), async (req, res) => {
   const { bienId, clientId, nom, tel, date, heure, notes } = req.body;
   if (!bienId || !date) return res.status(400).json({ error: "bienId et date requis" });
-  const r = prepare("INSERT INTO visites (bienId,clientId,nom,tel,date,heure,notes,statut) VALUES (?,?,?,?,?,?,?,'planifie')")
+  const r = await prepare("INSERT INTO visites (bienId,clientId,nom,tel,date,heure,notes,statut) VALUES (?,?,?,?,?,?,?,'planifie')")
     .run(+bienId, clientId||null, nom||null, tel||null, date, heure||null, notes||null);
-  const visite = prepare("SELECT * FROM visites WHERE id=?").get(r.lastInsertRowid);
-  const bien   = prepare("SELECT * FROM biens WHERE id=?").get(+bienId);
+  const visite = await prepare("SELECT * FROM visites WHERE id=?").get(r.lastInsertRowid);
+  const bien   = await prepare("SELECT * FROM biens WHERE id=?").get(+bienId);
   // Notification WhatsApp
   notifNouvelleVisite(visite, bien).catch(e => console.error("WhatsApp visite:", e.message));
   res.status(201).json(visite);
 });
 
-router.put("/:id", auth, requireModule("visites"), (req, res) => {
+router.put("/:id", auth, requireModule("visites"), async (req, res) => {
   const { statut, notes } = req.body;
-  prepare("UPDATE visites SET statut=?,notes=? WHERE id=?").run(statut||"planifie", notes||null, +req.params.id);
-  res.json(prepare("SELECT * FROM visites WHERE id=?").get(+req.params.id));
+  await prepare("UPDATE visites SET statut=?,notes=? WHERE id=?").run(statut||"planifie", notes||null, +req.params.id);
+  res.json(await prepare("SELECT * FROM visites WHERE id=?").get(+req.params.id));
 });
 
-router.delete("/:id", auth, requireModule("visites"), (req, res) => {
-  prepare("DELETE FROM visites WHERE id=?").run(+req.params.id);
+router.delete("/:id", auth, requireModule("visites"), async (req, res) => {
+  await prepare("DELETE FROM visites WHERE id=?").run(+req.params.id);
   res.json({ success: true });
 });
 

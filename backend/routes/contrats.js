@@ -6,9 +6,9 @@ const { auth, requireModule } = require("../middleware/auth");
 
 // GET /api/contrats — avec alertes expirant bientôt (uniquement pour les baux,
 // un contrat de vente n'a pas de notion d'échéance/renouvellement).
-router.get("/", auth, (_, res) => {
+router.get("/", auth, async (_, res) => {
   const today = new Date().toISOString().split("T")[0];
-  const rows = prepare(`
+  const rows = await prepare(`
     SELECT c.*, cl.nom as clientNom, cl.tel as clientTel, cl.whatsapp as clientWa,
            b.titre as bienTitre, b.ref as bienRef
     FROM contrats c
@@ -28,7 +28,7 @@ router.get("/", auth, (_, res) => {
 });
 
 // POST /api/contrats
-router.post("/", auth, requireModule("contrats"), (req, res) => {
+router.post("/", auth, requireModule("contrats"), async (req, res) => {
   const {
     type, clientId, bienId,
     dateDebut, dateFin, loyer, caution, indexation, garantie,
@@ -48,12 +48,12 @@ router.post("/", auth, requireModule("contrats"), (req, res) => {
     if (!prixVente || +prixVente <= 0) return res.status(400).json({ error: "Le prix de vente doit être supérieur à 0." });
   }
 
-  const count = prepare("SELECT COUNT(*) as c FROM contrats").get().c;
+  const count = await prepare("SELECT COUNT(*) as c FROM contrats").get().c;
   const ref   = t === "bail"
     ? `BAI-${new Date().getFullYear()}-${String(count+1).padStart(3,"0")}`
     : `CTV-${new Date().getFullYear()}-${String(count+1).padStart(3,"0")}`;
 
-  const r = prepare(`
+  const r = await prepare(`
     INSERT INTO contrats
       (ref,type,clientId,bienId,dateDebut,dateFin,loyer,caution,indexation,garantie,
        dateSignature,prixVente,notaire,titreVerifie,notes,statut)
@@ -69,23 +69,23 @@ router.post("/", auth, requireModule("contrats"), (req, res) => {
   // touche pas au statut du bien — c'est le module Ventes qui gère le cycle
   // prospect → ... → finalisée → "vendu" (cf. routes/ventes.js).
   if (t === "bail") {
-    prepare("UPDATE biens SET statut='loue' WHERE id=?").run(+bienId);
+    await prepare("UPDATE biens SET statut='loue' WHERE id=?").run(+bienId);
   }
 
-  res.status(201).json(prepare("SELECT * FROM contrats WHERE id=?").get(r.lastInsertRowid));
+  res.status(201).json(await prepare("SELECT * FROM contrats WHERE id=?").get(r.lastInsertRowid));
 });
 
 // PUT /api/contrats/:id — renouvellement ou modification
-router.put("/:id", auth, requireModule("contrats"), (req, res) => {
+router.put("/:id", auth, requireModule("contrats"), async (req, res) => {
   const id = +req.params.id;
-  const curr = prepare("SELECT * FROM contrats WHERE id=?").get(id);
+  const curr = await prepare("SELECT * FROM contrats WHERE id=?").get(id);
   if (!curr) return res.status(404).json({ error: "Contrat introuvable" });
 
   const { statut, dateFin, loyer, dateSignature, prixVente, notaire, titreVerifie, notes } = req.body;
   if (loyer !== undefined && +loyer < 0) return res.status(400).json({ error: "Le loyer ne peut pas être négatif." });
   if (prixVente !== undefined && +prixVente < 0) return res.status(400).json({ error: "Le prix de vente ne peut pas être négatif." });
 
-  prepare(`
+  await prepare(`
     UPDATE contrats SET
       statut=?, dateFin=?, loyer=?, dateSignature=?, prixVente=?, notaire=?, titreVerifie=?, notes=?
     WHERE id=?
@@ -100,26 +100,26 @@ router.put("/:id", auth, requireModule("contrats"), (req, res) => {
     notes!==undefined?notes:curr.notes,
     id
   );
-  res.json(prepare("SELECT * FROM contrats WHERE id=?").get(id));
+  res.json(await prepare("SELECT * FROM contrats WHERE id=?").get(id));
 });
 
 // DELETE /api/contrats/:id
-router.delete("/:id", auth, requireModule("contrats"), (req, res) => {
-  const c = prepare("SELECT * FROM contrats WHERE id=?").get(+req.params.id);
+router.delete("/:id", auth, requireModule("contrats"), async (req, res) => {
+  const c = await prepare("SELECT * FROM contrats WHERE id=?").get(+req.params.id);
   if (!c) return res.status(404).json({ error: "Introuvable" });
   // Si on supprime un bail actif, le bien redevient disponible (sauf s'il a
   // d'autres locataires actifs ou une vente en cours — même logique que la
   // suppression d'un client dans routes/clients.js).
   if (c.type === "bail" && c.statut === "actif") {
-    const autres = prepare("SELECT COUNT(*) as n FROM clients WHERE bienId=? AND type='locataire'").get(c.bienId).n;
+    const autres = await prepare("SELECT COUNT(*) as n FROM clients WHERE bienId=? AND type='locataire'").get(c.bienId).n;
     if (autres === 0) {
-      const bien = prepare("SELECT statut FROM biens WHERE id=?").get(c.bienId);
+      const bien = await prepare("SELECT statut FROM biens WHERE id=?").get(c.bienId);
       if (bien && !["en_cours","vendu"].includes(bien.statut)) {
-        prepare("UPDATE biens SET statut='disponible' WHERE id=?").run(c.bienId);
+        await prepare("UPDATE biens SET statut='disponible' WHERE id=?").run(c.bienId);
       }
     }
   }
-  prepare("DELETE FROM contrats WHERE id=?").run(c.id);
+  await prepare("DELETE FROM contrats WHERE id=?").run(c.id);
   res.json({ success: true });
 });
 

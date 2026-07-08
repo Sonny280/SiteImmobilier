@@ -23,12 +23,12 @@ const STATIC_PAGES = [
   { path: "/calculatrice",         priority: "0.5", freq: "monthly" },
 ];
 
-router.get("/sitemap.xml", (_, res) => {
-  const biens = prepare(
+router.get("/sitemap.xml", async (_, res) => {
+  const biens = await prepare(
     "SELECT id, updatedAt FROM biens WHERE statut != 'archive'"
   ).all();
 
-  const articles = prepare(
+  const articles = await prepare(
     "SELECT id, updatedAt FROM articles WHERE statut = 'publie'"
   ).all();
 

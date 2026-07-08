@@ -7,31 +7,31 @@ const { auth, passwordLimiter } = require("../middleware/auth");
 
 const ROLES = ["superadmin","admin","commercial","comptable","lecture"];
 
-function superAdmin(req, res, next) {
+async function superAdmin(req, res, next) {
   if (req.user?.role !== "superadmin") return res.status(403).json({ error: "Accès réservé au super-administrateur" });
   next();
 }
 
 // Règle de robustesse minimale du mot de passe — appliquée à toute création/changement.
-function validatePassword(pwd) {
+async function validatePassword(pwd) {
   if (!pwd || pwd.length < 8) return "Le mot de passe doit contenir au moins 8 caractères.";
   if (!/[A-Z]/.test(pwd)) return "Le mot de passe doit contenir au moins une majuscule.";
   if (!/[0-9]/.test(pwd)) return "Le mot de passe doit contenir au moins un chiffre.";
   return null;
 }
 
-function countSuperadmins() {
-  return prepare("SELECT COUNT(*) as n FROM users WHERE role='superadmin'").get().n;
+async function countSuperadmins() {
+  return await prepare("SELECT COUNT(*) as n FROM users WHERE role='superadmin'").get().n;
 }
 
 // ── GET /api/users — liste (superadmin uniquement) ────────────────
-router.get("/", auth, superAdmin, (req, res) => {
-  res.json(prepare("SELECT id,nom,email,role,createdAt,updatedAt FROM users ORDER BY createdAt DESC").all());
+router.get("/", auth, superAdmin, async (req, res) => {
+  res.json(await prepare("SELECT id,nom,email,role,createdAt,updatedAt FROM users ORDER BY createdAt DESC").all());
 });
 
 // ── GET /api/users/me — profil courant (tout rôle connecté) ───────
-router.get("/me", auth, (req, res) => {
-  const u = prepare("SELECT id,nom,email,role,createdAt FROM users WHERE id=?").get(req.user.id);
+router.get("/me", auth, async (req, res) => {
+  const u = await prepare("SELECT id,nom,email,role,createdAt FROM users WHERE id=?").get(req.user.id);
   if (!u) return res.status(404).json({ error: "Utilisateur introuvable" });
   res.json(u);
 });
@@ -43,31 +43,31 @@ router.post("/", auth, superAdmin, async (req, res) => {
   if (!ROLES.includes(role)) return res.status(400).json({ error: "Rôle invalide" });
   const pwdErr = validatePassword(password);
   if (pwdErr) return res.status(400).json({ error: pwdErr });
-  if (prepare("SELECT id FROM users WHERE email=?").get(email)) return res.status(409).json({ error: "Cet email est déjà utilisé" });
+  if (await prepare("SELECT id FROM users WHERE email=?").get(email)) return res.status(409).json({ error: "Cet email est déjà utilisé" });
   const hash = await bcrypt.hash(password, 12);
-  const r = prepare("INSERT INTO users(nom,email,password,role)VALUES(?,?,?,?)").run(nom, email, hash, role);
-  res.status(201).json(prepare("SELECT id,nom,email,role,createdAt FROM users WHERE id=?").get(r.lastInsertRowid));
+  const r = await prepare("INSERT INTO users(nom,email,password,role)VALUES(?,?,?,?)").run(nom, email, hash, role);
+  res.status(201).json(await prepare("SELECT id,nom,email,role,createdAt FROM users WHERE id=?").get(r.lastInsertRowid));
 });
 
 // ── PUT /api/users/:id — modifier nom/email/rôle (superadmin uniquement) ──
 router.put("/:id", auth, superAdmin, async (req, res) => {
   const id = +req.params.id;
   const { nom, email, role } = req.body;
-  const u = prepare("SELECT * FROM users WHERE id=?").get(id);
+  const u = await prepare("SELECT * FROM users WHERE id=?").get(id);
   if (!u) return res.status(404).json({ error: "Introuvable" });
 
   if (role && !ROLES.includes(role)) return res.status(400).json({ error: "Rôle invalide" });
   // Empêcher de rétrograder le dernier superadmin (y compris soi-même)
-  if (u.role === "superadmin" && role && role !== "superadmin" && countSuperadmins() <= 1) {
+  if (u.role === "superadmin" && role && role !== "superadmin" && await countSuperadmins() <= 1) {
     return res.status(400).json({ error: "Impossible de rétrograder le seul super-administrateur restant." });
   }
-  if (email && email !== u.email && prepare("SELECT id FROM users WHERE email=? AND id!=?").get(email, id)) {
+  if (email && email !== u.email && await prepare("SELECT id FROM users WHERE email=? AND id!=?").get(email, id)) {
     return res.status(409).json({ error: "Cet email est déjà utilisé par un autre compte." });
   }
 
-  prepare("UPDATE users SET nom=?,email=?,role=?,updatedAt=datetime('now') WHERE id=?")
+  await prepare("UPDATE users SET nom=?,email=?,role=?,updatedAt=datetime('now') WHERE id=?")
     .run(nom || u.nom, email || u.email, role || u.role, id);
-  res.json(prepare("SELECT id,nom,email,role,createdAt,updatedAt FROM users WHERE id=?").get(id));
+  res.json(await prepare("SELECT id,nom,email,role,createdAt,updatedAt FROM users WHERE id=?").get(id));
 });
 
 // ── PUT /api/users/:id/password — changer le mot de passe d'un AUTRE compte
@@ -75,12 +75,12 @@ router.put("/:id", auth, superAdmin, async (req, res) => {
 router.put("/:id/password", auth, superAdmin, passwordLimiter, async (req, res) => {
   const id = +req.params.id;
   const { password } = req.body;
-  const u = prepare("SELECT * FROM users WHERE id=?").get(id);
+  const u = await prepare("SELECT * FROM users WHERE id=?").get(id);
   if (!u) return res.status(404).json({ error: "Introuvable" });
   const pwdErr = validatePassword(password);
   if (pwdErr) return res.status(400).json({ error: pwdErr });
   const hash = await bcrypt.hash(password, 12);
-  prepare("UPDATE users SET password=?,updatedAt=datetime('now') WHERE id=?").run(hash, id);
+  await prepare("UPDATE users SET password=?,updatedAt=datetime('now') WHERE id=?").run(hash, id);
   res.json({ success: true, message: "Mot de passe réinitialisé." });
 });
 
@@ -89,26 +89,26 @@ router.put("/:id/password", auth, superAdmin, passwordLimiter, async (req, res) 
 router.put("/me/password", auth, passwordLimiter, async (req, res) => {
   const { ancien, nouveau } = req.body;
   if (!ancien || !nouveau) return res.status(400).json({ error: "Ancien et nouveau mot de passe requis." });
-  const u = prepare("SELECT * FROM users WHERE id=?").get(req.user.id);
+  const u = await prepare("SELECT * FROM users WHERE id=?").get(req.user.id);
   if (!u) return res.status(404).json({ error: "Utilisateur introuvable" });
   if (!bcrypt.compareSync(ancien, u.password)) return res.status(401).json({ error: "Mot de passe actuel incorrect." });
   const pwdErr = validatePassword(nouveau);
   if (pwdErr) return res.status(400).json({ error: pwdErr });
   const hash = await bcrypt.hash(nouveau, 12);
-  prepare("UPDATE users SET password=?,updatedAt=datetime('now') WHERE id=?").run(hash, req.user.id);
+  await prepare("UPDATE users SET password=?,updatedAt=datetime('now') WHERE id=?").run(hash, req.user.id);
   res.json({ success: true, message: "Mot de passe modifié." });
 });
 
 // ── DELETE /api/users/:id — supprimer un compte (superadmin uniquement) ───
-router.delete("/:id", auth, superAdmin, (req, res) => {
+router.delete("/:id", auth, superAdmin, async (req, res) => {
   const id = +req.params.id;
-  const u = prepare("SELECT * FROM users WHERE id=?").get(id);
+  const u = await prepare("SELECT * FROM users WHERE id=?").get(id);
   if (!u) return res.status(404).json({ error: "Introuvable" });
   if (id === req.user.id) return res.status(400).json({ error: "Vous ne pouvez pas supprimer votre propre compte." });
-  if (u.role === "superadmin" && countSuperadmins() <= 1) {
+  if (u.role === "superadmin" && await countSuperadmins() <= 1) {
     return res.status(400).json({ error: "Impossible de supprimer le seul super-administrateur." });
   }
-  prepare("DELETE FROM users WHERE id=?").run(id);
+  await prepare("DELETE FROM users WHERE id=?").run(id);
   res.json({ success: true });
 });
 
