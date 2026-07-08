@@ -6,7 +6,7 @@ const path=require("path");
 const {initDb}=require("./config/database");
 
 const app=express();
-const PORT=process.env.PORT||3001;
+const PORT=process.env.PORT||8080;
 const isProd = process.env.NODE_ENV === "production";
 
 // ── 1. Forcer HTTPS en production ─────────────────────────────────
