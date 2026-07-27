@@ -1,37 +1,87 @@
 // config/database.js — PostgreSQL (Railway) + SQLite fallback local
-// Utilise pg en production (DATABASE_URL fournie par Railway) et
-// better-sqlite3 en développement local pour garder la même simplicité.
 require("dotenv").config();
 const isProd = !!process.env.DATABASE_URL;
+let _pg = null;
 
-let _pg = null;   // client PostgreSQL (prod)
-let _sq = null;   // base SQLite (dev)
+// ── Conversion camelCase ↔ snake_case pour PostgreSQL ─────────────
+// PostgreSQL est insensible à la casse SANS guillemets — "createdAt"
+// devient "createdat". On utilise snake_case côté PostgreSQL et on
+// reconvertit en camelCase dans les résultats pour garder la compatibilité
+// avec tout le code existant des routes.
 
-// ── Interface commune prepare() identique pour les deux drivers ───
-// Toutes les routes utilisent prepare(sql).run/get/all — rien ne change
-// dans les routes, seul ce fichier change.
+function toSnake(str) {
+  return str.replace(/[A-Z]/g, l => `_${l.toLowerCase()}`);
+}
+
+function keysToCamel(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const result = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const camel = k.replace(/_([a-z])/g, (_, l) => l.toUpperCase());
+    result[camel] = v;
+  }
+  return result;
+}
+
+// Convertit les noms de colonnes dans une requête SQL
+// ex: "createdAt" → created_at, bienId → bien_id
+function sqlToSnake(sql) {
+  // Remplace les noms camelCase courants par leur équivalent snake_case
+  return sql
+    .replace(/\bcreatedAt\b/g, 'created_at')
+    .replace(/\bupdatedAt\b/g, 'updated_at')
+    .replace(/\bbienId\b/g, 'bien_id')
+    .replace(/\bclientId\b/g, 'client_id')
+    .replace(/\bventeId\b/g, 'vente_id')
+    .replace(/\bloyerId\b/g, 'loyer_id')
+    .replace(/\bentiteId\b/g, 'entite_id')
+    .replace(/\bdateDebut\b/g, 'date_debut')
+    .replace(/\bdateFin\b/g, 'date_fin')
+    .replace(/\bdatePaiement\b/g, 'date_paiement')
+    .replace(/\bmodePaiement\b/g, 'mode_paiement')
+    .replace(/\bmontantRecu\b/g, 'montant_recu')
+    .replace(/\bjoursRetard\b/g, 'jours_retard')
+    .replace(/\bprixAffiche\b/g, 'prix_affiche')
+    .replace(/\bprixFinal\b/g, 'prix_final')
+    .replace(/\bprixNegociation\b/g, 'prix_negociation')
+    .replace(/\btauxCommission\b/g, 'taux_commission')
+    .replace(/\bmodeFinancement\b/g, 'mode_financement')
+    .replace(/\btitreVerifie\b/g, 'titre_verifie')
+    .replace(/\bdiagnosticFait\b/g, 'diagnostic_fait')
+    .replace(/\bdateOffre\b/g, 'date_offre')
+    .replace(/\bmontantOffre\b/g, 'montant_offre')
+    .replace(/\bdateCompromis\b/g, 'date_compromis')
+    .replace(/\bdateActe\b/g, 'date_acte')
+    .replace(/\bdateEntree\b/g, 'date_entree')
+    .replace(/\bdateSortie\b/g, 'date_sortie')
+    .replace(/\bdateSignature\b/g, 'date_signature')
+    .replace(/\bprixVente\b/g, 'prix_vente')
+    .replace(/\bpiece_identite\b/g, 'piece_identite')
+    .replace(/\bacheteurId\b/g, 'acheteur_id')
+    .replace(/\bacheteurNom\b/g, 'acheteur_nom')
+    .replace(/\bacheteurTel\b/g, 'acheteur_tel')
+    .replace(/\bacheteurEmail\b/g, 'acheteur_email')
+    .replace(/\bvendeurNom\b/g, 'vendeur_nom')
+    .replace(/\bvendeurTel\b/g, 'vendeur_tel')
+    .replace(/\bmeta_title\b/g, 'meta_title')
+    .replace(/\bmeta_desc\b/g, 'meta_desc')
+    .replace(/\bmonProfil\b/g, 'mon_profil');
+}
 
 async function initDb() {
   if (isProd) {
-    await _initPg();
+    if (_pg) return;
+    const { Pool } = require("pg");
+    _pg = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    });
+    await _pg.query("SELECT 1");
+    console.log("✅ PostgreSQL connecté");
+    await _schemaPg();
   } else {
     _initSqlite();
   }
-}
-
-// ── PostgreSQL (production Railway) ──────────────────────────────
-async function _initPg() {
-  if (_pg) return;
-  const { Pool } = require("pg");
-  _pg = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-  });
-  // Test connexion
-  await _pg.query("SELECT 1");
-  console.log("✅ PostgreSQL connecté");
-  await _schemaPg();
-  await _migratePg();
 }
 
 async function _schemaPg() {
@@ -40,8 +90,8 @@ async function _schemaPg() {
       id SERIAL PRIMARY KEY, nom TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL, password TEXT NOT NULL,
       role TEXT DEFAULT 'admin',
-      "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-      "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS biens (
       id SERIAL PRIMARY KEY, ref TEXT UNIQUE, slug TEXT UNIQUE,
@@ -53,201 +103,154 @@ async function _schemaPg() {
       whatsapp TEXT, telephone TEXT, emoji TEXT DEFAULT '🏢',
       featured INTEGER DEFAULT 0, vues INTEGER DEFAULT 0,
       meta_title TEXT, meta_desc TEXT,
-      "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS photos (
-      id SERIAL PRIMARY KEY, "bienId" INTEGER NOT NULL,
+      id SERIAL PRIMARY KEY, bien_id INTEGER NOT NULL,
       url TEXT NOT NULL, filename TEXT, position INTEGER DEFAULT 0,
-      principale INTEGER DEFAULT 0, "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      principale INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS clients (
       id SERIAL PRIMARY KEY, nom TEXT NOT NULL, email TEXT, tel TEXT,
-      whatsapp TEXT, type TEXT DEFAULT 'locataire', "bienId" INTEGER,
-      "dateEntree" TEXT, "dateSortie" TEXT, caution REAL DEFAULT 0,
+      whatsapp TEXT, type TEXT DEFAULT 'locataire', bien_id INTEGER,
+      date_entree TEXT, date_sortie TEXT, caution REAL DEFAULT 0,
       loyer REAL DEFAULT 0, profession TEXT, employeur TEXT, revenus REAL,
-      piece_identite TEXT, notes TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      piece_identite TEXT, notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS loyers (
-      id SERIAL PRIMARY KEY, "clientId" INTEGER NOT NULL, "bienId" INTEGER NOT NULL,
+      id SERIAL PRIMARY KEY, client_id INTEGER NOT NULL, bien_id INTEGER NOT NULL,
       montant REAL NOT NULL, mois TEXT NOT NULL, echeance TEXT,
-      statut TEXT DEFAULT 'en_attente', "datePaiement" TEXT,
-      "montantRecu" REAL, "modePaiement" TEXT DEFAULT 'virement',
-      "joursRetard" INTEGER DEFAULT 0, penalite REAL DEFAULT 0, notes TEXT,
-      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      statut TEXT DEFAULT 'en_attente', date_paiement TEXT,
+      montant_recu REAL, mode_paiement TEXT DEFAULT 'virement',
+      jours_retard INTEGER DEFAULT 0, penalite REAL DEFAULT 0, notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS contrats (
       id SERIAL PRIMARY KEY, ref TEXT UNIQUE, type TEXT DEFAULT 'bail',
-      "clientId" INTEGER NOT NULL, "bienId" INTEGER NOT NULL,
-      "dateDebut" TEXT, "dateFin" TEXT, loyer REAL DEFAULT 0,
+      client_id INTEGER NOT NULL, bien_id INTEGER NOT NULL,
+      date_debut TEXT, date_fin TEXT, loyer REAL DEFAULT 0,
       caution REAL DEFAULT 0, indexation TEXT, garantie TEXT,
-      "dateSignature" TEXT, "prixVente" REAL, notaire TEXT,
-      "titreVerifie" INTEGER DEFAULT 0, statut TEXT DEFAULT 'actif',
-      notes TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      date_signature TEXT, prix_vente REAL, notaire TEXT,
+      titre_verifie INTEGER DEFAULT 0, statut TEXT DEFAULT 'actif',
+      notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS ventes (
-      id SERIAL PRIMARY KEY, ref TEXT UNIQUE, "bienId" INTEGER NOT NULL,
-      "acheteurId" INTEGER, "acheteurNom" TEXT, "acheteurTel" TEXT,
-      "acheteurEmail" TEXT, "vendeurNom" TEXT, "vendeurTel" TEXT,
-      "prixAffiche" REAL NOT NULL, "prixNegociation" REAL, "prixFinal" REAL,
-      commission REAL DEFAULT 0, "tauxCommission" REAL DEFAULT 5,
-      statut TEXT DEFAULT 'prospect', "dateOffre" TEXT, "montantOffre" REAL,
-      "dateCompromis" TEXT, "dateActe" TEXT, notaire TEXT,
-      acompte REAL DEFAULT 0, "modeFinancement" TEXT DEFAULT 'cash',
-      banque TEXT, "titreVerifie" INTEGER DEFAULT 0,
-      "diagnosticFait" INTEGER DEFAULT 0, notes TEXT,
-      "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      id SERIAL PRIMARY KEY, ref TEXT UNIQUE, bien_id INTEGER NOT NULL,
+      acheteur_id INTEGER, acheteur_nom TEXT, acheteur_tel TEXT,
+      acheteur_email TEXT, vendeur_nom TEXT, vendeur_tel TEXT,
+      prix_affiche REAL NOT NULL, prix_negociation REAL, prix_final REAL,
+      commission REAL DEFAULT 0, taux_commission REAL DEFAULT 5,
+      statut TEXT DEFAULT 'prospect', date_offre TEXT, montant_offre REAL,
+      date_compromis TEXT, date_acte TEXT, notaire TEXT,
+      acompte REAL DEFAULT 0, mode_financement TEXT DEFAULT 'cash',
+      banque TEXT, titre_verifie INTEGER DEFAULT 0,
+      diagnostic_fait INTEGER DEFAULT 0, notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS paiements_vente (
-      id SERIAL PRIMARY KEY, "venteId" INTEGER NOT NULL,
+      id SERIAL PRIMARY KEY, vente_id INTEGER NOT NULL,
       montant REAL NOT NULL, type TEXT DEFAULT 'acompte',
-      date TEXT NOT NULL, "modePaiement" TEXT DEFAULT 'virement',
-      reference TEXT, notes TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      date TEXT NOT NULL, mode_paiement TEXT DEFAULT 'virement',
+      reference TEXT, notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS demandes (
       id SERIAL PRIMARY KEY, nom TEXT NOT NULL, email TEXT, tel TEXT,
-      interet TEXT, budget TEXT, message TEXT, "bienId" INTEGER,
+      interet TEXT, budget TEXT, message TEXT, bien_id INTEGER,
       statut TEXT DEFAULT 'nouveau', source TEXT DEFAULT 'formulaire',
-      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS visites (
-      id SERIAL PRIMARY KEY, "bienId" INTEGER NOT NULL, "clientId" INTEGER,
+      id SERIAL PRIMARY KEY, bien_id INTEGER NOT NULL, client_id INTEGER,
       nom TEXT, tel TEXT, date TEXT NOT NULL, heure TEXT,
       statut TEXT DEFAULT 'planifie', notes TEXT,
-      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS relances (
-      id SERIAL PRIMARY KEY, "loyerId" INTEGER NOT NULL, "clientId" INTEGER NOT NULL,
+      id SERIAL PRIMARY KEY, loyer_id INTEGER NOT NULL, client_id INTEGER NOT NULL,
       type TEXT DEFAULT 'amiable', canal TEXT DEFAULT 'whatsapp',
-      date TEXT NOT NULL, notes TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      date TEXT NOT NULL, notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS temoignages (
       id SERIAL PRIMARY KEY, nom TEXT NOT NULL, profession TEXT,
       note INTEGER DEFAULT 5, texte TEXT NOT NULL,
-      statut TEXT DEFAULT 'en_attente', "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      statut TEXT DEFAULT 'en_attente', created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS realisations (
       id SERIAL PRIMARY KEY, titre TEXT NOT NULL,
       type TEXT DEFAULT 'Gestion locative', description TEXT,
       annee TEXT, commune TEXT, ville TEXT DEFAULT 'Abidjan',
       image TEXT, ordre INTEGER DEFAULT 0, visible INTEGER DEFAULT 1,
-      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS documents (
       id SERIAL PRIMARY KEY, nom TEXT NOT NULL, type TEXT DEFAULT 'autre',
-      entite TEXT NOT NULL, "entiteId" INTEGER NOT NULL,
-      fichier TEXT NOT NULL, taille INTEGER, "mimeType" TEXT,
-      notes TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      entite TEXT NOT NULL, entite_id INTEGER NOT NULL,
+      fichier TEXT NOT NULL, taille INTEGER, mime_type TEXT,
+      notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS articles (
       id SERIAL PRIMARY KEY, titre TEXT NOT NULL, slug TEXT UNIQUE,
       categorie TEXT DEFAULT 'Actualités', resume TEXT, contenu TEXT,
       auteur TEXT DEFAULT 'ImmobilierCI', statut TEXT DEFAULT 'brouillon',
       image TEXT, tags TEXT, vues INTEGER DEFAULT 0,
-      "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
-
-  // Index
-  await _pg.query(`
-    CREATE INDEX IF NOT EXISTS idx_biens_type ON biens(type);
-    CREATE INDEX IF NOT EXISTS idx_biens_statut ON biens(statut);
-    CREATE INDEX IF NOT EXISTS idx_photos_bien ON photos("bienId");
-    CREATE INDEX IF NOT EXISTS idx_loyers_mois ON loyers(mois);
-    CREATE INDEX IF NOT EXISTS idx_loyers_statut ON loyers(statut);
-    CREATE INDEX IF NOT EXISTS idx_ventes_statut ON ventes(statut);
-  `).catch(() => {});
+  console.log("✅ Schéma PostgreSQL créé");
 }
 
-async function _migratePg() {
-  // Migrations pour bases existantes
-  const migrations = [
-    `ALTER TABLE contrats ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'bail'`,
-    `ALTER TABLE contrats ADD COLUMN IF NOT EXISTS indexation TEXT`,
-    `ALTER TABLE contrats ADD COLUMN IF NOT EXISTS "dateSignature" TEXT`,
-    `ALTER TABLE contrats ADD COLUMN IF NOT EXISTS "prixVente" REAL`,
-    `ALTER TABLE contrats ADD COLUMN IF NOT EXISTS notaire TEXT`,
-    `ALTER TABLE contrats ADD COLUMN IF NOT EXISTS "titreVerifie" INTEGER DEFAULT 0`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT NOW()`,
-  ];
-  for (const sql of migrations) {
-    await _pg.query(sql).catch(() => {});
-  }
-}
-
-// ── SQLite (développement local) ──────────────────────────────────
+// SQLite local
+let _sq_ready = false;
 function _initSqlite() {
-  if (_sq) return;
-  const path = require("path");
-  const fs   = require("fs");
-  const DB_PATH = path.join(__dirname, "../sei.db");
-
-  try {
-    // Essayer better-sqlite3 d'abord (plus rapide)
-    const Database = require("better-sqlite3");
-    _sq = new Database(DB_PATH);
-    _sq._type = "better";
-    console.log("✅ SQLite (better-sqlite3) connecté");
-  } catch {
-    // Fallback sql.js
-    const initSqlJs = require("sql.js");
-    const SQL = require("sql.js");
-    // sql.js sync workaround
-    const sqlJs = require("sql.js");
-    _sq = { _type: "sqljs", _path: DB_PATH };
-    console.log("✅ SQLite (sql.js) connecté");
-  }
-  _schemaSqlite();
+  if (_sq_ready) return;
+  _sq_ready = true;
+  // Délègue au module SQLite existant
+  require("./database_sqlite").initDb();
 }
-
-function _schemaSqlite() {
-  // Utilise l'ancienne logique sql.js inchangée
-  const path   = require("path");
-  const fs     = require("fs");
-  const DB_PATH = path.join(__dirname, "../sei.db");
-
-  const { initSqlJs } = require("./database_sqlite");
-  // On délègue au fichier SQLite existant
-}
-
-// ── Interface prepare() unifiée ───────────────────────────────────
-// PostgreSQL : async via Pool.query()
-// SQLite     : sync via l'ancien code (inchangé)
-// Les routes appellent toujours prepare(sql).run/get/all — mais en mode
-// PostgreSQL ces méthodes retournent des Promesses que les routes await.
 
 function prepare(sql) {
   if (isProd && _pg) {
-    // Convertit les ? SQLite en $1 $2 ... PostgreSQL
+    // Convertir camelCase → snake_case dans le SQL
+    const pgSql = sqlToSnake(sql);
+    // Convertir ? → $1, $2...
     let i = 0;
-    const pgSql = sql.replace(/\?/g, () => `$${++i}`);
+    const paramSql = pgSql.replace(/\?/g, () => `$${++i}`);
+
     return {
       async run(...params) {
-        // Pour INSERT retourne lastInsertRowid
         const isInsert = /^\s*INSERT/i.test(sql);
-        const q = isInsert ? pgSql + " RETURNING id" : pgSql;
+        const q = isInsert ? paramSql + " RETURNING id" : paramSql;
         const r = await _pg.query(q, params.map(v => v === undefined ? null : v));
         return {
           lastInsertRowid: r.rows[0]?.id || 0,
-          changes: r.rowCount,
+          changes: r.rowCount || 0,
         };
       },
       async get(...params) {
-        const r = await _pg.query(pgSql + (pgSql.includes("LIMIT") ? "" : " LIMIT 1"), params.map(v => v === undefined ? null : v));
-        return r.rows[0] || null;
+        const q = /LIMIT/i.test(paramSql) ? paramSql : paramSql + " LIMIT 1";
+        const r = await _pg.query(q, params.map(v => v === undefined ? null : v));
+        return r.rows[0] ? keysToCamel(r.rows[0]) : null;
       },
       async all(...params) {
-        const r = await _pg.query(pgSql, params.map(v => v === undefined ? null : v));
-        return r.rows;
+        const r = await _pg.query(paramSql, params.map(v => v === undefined ? null : v));
+        return r.rows.map(keysToCamel);
       },
     };
   }
-
-  // Mode SQLite local — délègue à l'ancien module
+  // Mode SQLite local
   return require("./database_sqlite").prepare(sql);
 }
 
 async function exec(sql) {
-  if (isProd && _pg) { await _pg.query(sql).catch(() => {}); return; }
+  if (isProd && _pg) {
+    await _pg.query(sqlToSnake(sql)).catch(() => {});
+    return;
+  }
   require("./database_sqlite").exec(sql);
 }
 
