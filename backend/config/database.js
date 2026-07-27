@@ -1,10 +1,8 @@
-// config/database.js — PostgreSQL (Railway) avec colonnes snake_case
+// config/database.js — PostgreSQL (Railway) + SQLite fallback local
 require("dotenv").config();
 const isProd = !!process.env.DATABASE_URL;
 let _pg = null;
 
-// Convertit les clés snake_case des résultats PG en camelCase
-// pour garder la compatibilité avec tout le code existant
 function keysToCamel(obj) {
   if (!obj || typeof obj !== 'object') return obj;
   const result = {};
@@ -15,7 +13,6 @@ function keysToCamel(obj) {
   return result;
 }
 
-// Convertit les noms camelCase dans le SQL en snake_case pour PostgreSQL
 function sqlToSnake(sql) {
   return sql
     .replace(/\bcreatedAt\b/g, 'created_at')
@@ -52,12 +49,11 @@ function sqlToSnake(sql) {
     .replace(/\bacheteurEmail\b/g, 'acheteur_email')
     .replace(/\bvendeurNom\b/g, 'vendeur_nom')
     .replace(/\bvendeurTel\b/g, 'vendeur_tel')
-    .replace(/\bmimeType\b/g, 'mime_type')
-    .replace(/\blast_insert_rowid\(\)/g, 'lastval()');
+    .replace(/\bmimeType\b/g, 'mime_type');
 }
 
 async function initDb() {
-  if (!isProd) { _initSqlite(); return; }
+  if (!isProd) { require("./database_sqlite").initDb(); return; }
   if (_pg) return;
   const { Pool } = require("pg");
   _pg = new Pool({
@@ -66,46 +62,35 @@ async function initDb() {
   });
   await _pg.query("SELECT 1");
   console.log("✅ PostgreSQL connecté");
-  await _dropAndRecreate();
+  await _createSchema();
+  await _createAdmin();
 }
 
-// Supprime toutes les tables existantes et recrée avec snake_case
-// Nécessaire car l'ancienne version utilisait des colonnes camelCase
-// que PostgreSQL stocke en minuscules sans guillemets
-async function _dropAndRecreate() {
-  // Vérifier si les tables existent déjà avec le bon schéma
-  const check = await _pg.query(
-    `SELECT column_name FROM information_schema.columns 
-     WHERE table_name='biens' AND column_name='created_at' LIMIT 1`
-  );
+async function _createSchema() {
+  // Vérifier si la table users existe ET a des données
+  const tableExists = await _pg.query(`
+    SELECT EXISTS (
+      SELECT FROM information_schema.tables 
+      WHERE table_name = 'users'
+    ) as exists
+  `);
   
-  if (check.rows.length > 0) {
-    console.log("✅ Schéma PostgreSQL déjà correct");
-    return;
+  if (tableExists.rows[0]?.exists) {
+    // Vérifier aussi que les colonnes sont en snake_case
+    const colCheck = await _pg.query(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name='users' AND column_name='created_at' LIMIT 1
+    `);
+    if (colCheck.rows.length > 0) {
+      console.log("✅ Schéma PostgreSQL déjà correct");
+      return;
+    }
+    // Mauvaises colonnes — supprimer et recréer
+    console.log("🔄 Suppression des anciennes tables...");
+    await _dropAll();
   }
 
-  console.log("🔄 Migration du schéma PostgreSQL...");
-  
-  // Supprimer les tables dans l'ordre (dépendances)
-  await _pg.query(`
-    DROP TABLE IF EXISTS paiements_vente CASCADE;
-    DROP TABLE IF EXISTS documents CASCADE;
-    DROP TABLE IF EXISTS relances CASCADE;
-    DROP TABLE IF EXISTS visites CASCADE;
-    DROP TABLE IF EXISTS demandes CASCADE;
-    DROP TABLE IF EXISTS contrats CASCADE;
-    DROP TABLE IF EXISTS loyers CASCADE;
-    DROP TABLE IF EXISTS ventes CASCADE;
-    DROP TABLE IF EXISTS photos CASCADE;
-    DROP TABLE IF EXISTS clients CASCADE;
-    DROP TABLE IF EXISTS articles CASCADE;
-    DROP TABLE IF EXISTS temoignages CASCADE;
-    DROP TABLE IF EXISTS realisations CASCADE;
-    DROP TABLE IF EXISTS biens CASCADE;
-    DROP TABLE IF EXISTS users CASCADE;
-  `);
-
-  // Recréer avec snake_case
+  console.log("🔄 Création du schéma PostgreSQL...");
   await _pg.query(`
     CREATE TABLE users (
       id SERIAL PRIMARY KEY, nom TEXT NOT NULL,
@@ -221,9 +206,31 @@ async function _dropAndRecreate() {
   console.log("✅ Schéma PostgreSQL créé");
 }
 
-// SQLite local inchangé
-function _initSqlite() {
-  require("./database_sqlite").initDb();
+async function _dropAll() {
+  await _pg.query(`
+    DROP TABLE IF EXISTS paiements_vente, documents, relances, visites,
+    demandes, contrats, loyers, ventes, photos, clients,
+    articles, temoignages, realisations, biens, users CASCADE;
+  `);
+}
+
+async function _createAdmin() {
+  try {
+    const bcrypt = require("bcryptjs");
+    const exists = await _pg.query("SELECT id FROM users WHERE role='superadmin' LIMIT 1");
+    if (exists.rows.length === 0) {
+      const hash = bcrypt.hashSync("Admin2025!", 12);
+      await _pg.query(
+        "INSERT INTO users(nom,email,password,role) VALUES($1,$2,$3,$4)",
+        ["Kouassi Atse Charles", "contact@immobilierci.ci", hash, "superadmin"]
+      );
+      console.log("✅ Compte admin créé : contact@immobilierci.ci / Admin2025!");
+    } else {
+      console.log("✅ Admin déjà présent");
+    }
+  } catch(e) {
+    console.error("❌ Erreur création admin:", e.message);
+  }
 }
 
 function prepare(sql) {
@@ -236,10 +243,7 @@ function prepare(sql) {
         const isInsert = /^\s*INSERT/i.test(sql);
         const q = isInsert ? paramSql + " RETURNING id" : paramSql;
         const r = await _pg.query(q, params.map(v => v === undefined ? null : v));
-        return {
-          lastInsertRowid: r.rows[0]?.id || 0,
-          changes: r.rowCount || 0,
-        };
+        return { lastInsertRowid: r.rows[0]?.id || 0, changes: r.rowCount || 0 };
       },
       async get(...params) {
         const q = /LIMIT/i.test(paramSql) ? paramSql : paramSql + " LIMIT 1";
@@ -256,13 +260,8 @@ function prepare(sql) {
 }
 
 async function exec(sql) {
-  if (isProd && _pg) {
-    await _pg.query(sqlToSnake(sql)).catch(() => {});
-    return;
-  }
+  if (isProd && _pg) { await _pg.query(sqlToSnake(sql)).catch(() => {}); return; }
   require("./database_sqlite").exec(sql);
 }
 
 module.exports = { prepare, exec, initDb };
-
-
