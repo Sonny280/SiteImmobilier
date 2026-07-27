@@ -20,7 +20,7 @@ router.get("/",auth, async (req, res) =>{
   const p=[];
   if(statut&&statut!=="all"){sql+=" AND statut=?";p.push(statut);}
   sql+=" ORDER BY createdAt DESC";
-  res.json(await prepare(sql).all(...p).map(withDetails));
+  res.json((await prepare(sql).all(...p)).map(withDetails));
 });
 
 router.get("/stats",auth,async (_, res) => {
