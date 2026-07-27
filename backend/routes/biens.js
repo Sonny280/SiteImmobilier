@@ -12,7 +12,8 @@ function slug(titre, id) {
 }
 function withPhotos(b) {
   if (!b) return null;
-  const photos = prepare("SELECT * FROM photos WHERE bienId=? ORDER BY principale DESC, position ASC").all(b.id)).map(otoUrl(p.filename)||p.url}));
+  const photos = (await prepare("SELECT * FROM photos WHERE bienId=? ORDER BY principale DESC, position ASC").all(b.id)).map(p=>({...p,url:photoUrl(p.filename)||p.url}));
+
   return {...b, photos, photo_principale: photos[0]||null};
 
 router.get("/", (req,res) => {
