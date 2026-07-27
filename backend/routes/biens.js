@@ -5,13 +5,7 @@ const path     = require("path");
 const fs       = require("fs");
 const { prepare } = require("../config/database");
 const { auth, requireModule } = require("../middleware/auth");
-const upload   = require("../config/upload");
-
-const UPLOAD_DIR = path.join(__dirname, "../uploads");
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const BASE_URL = process.env.SITE_URL || "http://localhost:3001";
-const photoUrl = f => f ? `${BASE_URL}/uploads/${f}` : null;
+const { upload, photoUrl, UPLOAD_DIR } = require("../config/upload");
 
 function slug(titre, id) {
   return titre.toLowerCase().normalize("NFD")
@@ -217,3 +211,4 @@ router.put("/:id/photos/:photoId/principale", auth, requireModule("biens"), asyn
 });
 
 module.exports = router;
+
