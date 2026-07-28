@@ -91,6 +91,14 @@ app.use((err,req,res,_)=>{
   if(err.code==="LIMIT_FILE_SIZE") return res.status(400).json({error:"Fichier trop volumineux (max 8Mo)"});
   res.status(err.status||500).json({error:err.message||"Erreur serveur"});
 });
+// Servir le frontend React
+app.use(express.static(path.join(__dirname, "../frontend/dist")));
+app.get("*", (req, res) => {
+  if (!req.path.startsWith("/api") && !req.path.startsWith("/uploads")) {
+    res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
+  }
+});
+
 
 initDb().then(()=>{
   app.listen(PORT, "0.0.0.0", ()=>{
@@ -100,4 +108,5 @@ initDb().then(()=>{
     else console.log(`⚠️  NODE_ENV n'est pas "production" — HTTPS non forcé. Mettez NODE_ENV=production sur votre hébergement.`);
   });
 }).catch(e=>{console.error("❌",e.message);process.exit(1);});
+
 
