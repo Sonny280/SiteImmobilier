@@ -92,12 +92,19 @@ app.use((err,req,res,_)=>{
   res.status(err.status||500).json({error:err.message||"Erreur serveur"});
 });
 // Servir le frontend React
-app.use(express.static(path.join(__dirname, "../frontend/dist")));
-app.get("*", (req, res) => {
-  if (!req.path.startsWith("/api") && !req.path.startsWith("/uploads")) {
-    res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
-  }
-});
+const DIST = path.join(__dirname, "..", "frontend", "dist");
+if (require("fs").existsSync(DIST)) {
+  app.use(express.static(DIST));
+  app.get("*", (req, res) => {
+    if (!req.path.startsWith("/api") && !req.path.startsWith("/uploads")) {
+      res.sendFile(path.join(DIST, "index.html"));
+    }
+  });
+  console.log("✅ Frontend servi depuis", DIST);
+} else {
+  console.log("⚠️ Dossier frontend/dist introuvable");
+}
+
 
 
 initDb().then(()=>{
