@@ -91,3 +91,4 @@ function prepare(sql) {
 
 function exec(sql) { if (_db) { _db.run(sql); _db._save(); } }
 module.exports = { prepare, exec, initDb };
+

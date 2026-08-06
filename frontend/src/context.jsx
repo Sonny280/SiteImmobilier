@@ -1,41 +1,28 @@
-// context.jsx v5 — sécurisé, toutes les actions persistées côté backend
+// context.jsx v6 — JWT dans sessionStorage (cross-domain Vercel/Railway)
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { API } from "./utils.js";
 
 const Ctx = createContext(null);
 export const useCtx = () => useContext(Ctx);
 
-// ── Correspondance URL ↔ état de page interne ─────────────────────
 const ROUTE_TO_PAGE = {
-  "/":                    "accueil",
-  "/qui-sommes-nous":     "qui-sommes-nous",
-  "/services":            "services",
-  "/services/location":   "services-location",
-  "/services/meuble":     "services-meuble",
-  "/services/vente":      "services-vente",
-  "/services/terrain":    "services-terrain",
-  "/services/gestion":    "services-gestion",
-  "/realisations":        "realisations",
-  "/temoignages":         "temoignages",
-  "/blog":                "blog",
-  "/contact":             "contact",
-  // "/calculatrice": "calculatrice",  // masqué
-  "/login":               "login",
-  "/admin":               "admin",
+  "/":"accueil", "/qui-sommes-nous":"qui-sommes-nous",
+  "/services":"services", "/services/location":"services-location",
+  "/services/meuble":"services-meuble", "/services/vente":"services-vente",
+  "/services/terrain":"services-terrain", "/services/gestion":"services-gestion",
+  "/realisations":"realisations", "/temoignages":"temoignages",
+  "/blog":"blog", "/contact":"contact", "/login":"login", "/admin":"admin",
 };
-const PAGE_TO_ROUTE = Object.fromEntries(
-  Object.entries(ROUTE_TO_PAGE).map(([k,v]) => [v,k])
-);
+const PAGE_TO_ROUTE = Object.fromEntries(Object.entries(ROUTE_TO_PAGE).map(([k,v])=>[v,k]));
 
 function pathnameToPage(pathname) {
   if (ROUTE_TO_PAGE[pathname]) return ROUTE_TO_PAGE[pathname];
   const bienMatch = pathname.match(/^\/bien\/(\d+)$/);
   if (bienMatch) return `bien-${bienMatch[1]}`;
-  const blogMatch  = pathname.match(/^\/blog\/(\d+)$/);
-  if (blogMatch)  return `blog-${blogMatch[1]}`;
+  const blogMatch = pathname.match(/^\/blog\/(\d+)$/);
+  if (blogMatch) return `blog-${blogMatch[1]}`;
   return "accueil";
 }
-
 function pageToPathname(page) {
   if (PAGE_TO_ROUTE[page]) return PAGE_TO_ROUTE[page];
   if (page.startsWith("bien-"))     return `/bien/${page.split("-")[1]}`;
@@ -44,102 +31,87 @@ function pageToPathname(page) {
   return "/";
 }
 
-// Permissions front (purement indicatives — le backend est la vraie barrière).
-// Reproduit la même matrice que backend/middleware/auth.js → MODULE_ACCESS.
 const MODULE_ACCESS = {
-  biens:    ["commercial"],
-  clients:  ["commercial"],
-  demandes: ["commercial"],
-  visites:  ["commercial"],
-  contrats: ["commercial","comptable"],
-  loyers:   ["comptable"],
-  ventes:   ["comptable"],
-  documents:["commercial","comptable"],
+  biens:["commercial"], clients:["commercial"], demandes:["commercial"],
+  visites:["commercial"], contrats:["commercial","comptable"],
+  loyers:["comptable"], ventes:["comptable"], documents:["commercial","comptable"],
 };
 function canWrite(role, moduleName) {
   if (!role) return false;
-  if (role === "superadmin" || role === "admin") return true;
-  if (role === "lecture") return false;
-  return (MODULE_ACCESS[moduleName] || []).includes(role);
+  if (role==="superadmin"||role==="admin") return true;
+  if (role==="lecture") return false;
+  return (MODULE_ACCESS[moduleName]||[]).includes(role);
 }
 
+// Token stocké en mémoire (sessionStorage pour persistance onglet)
+// Plus sécurisé que localStorage, fonctionne cross-domain contrairement aux cookies
+let _memToken = sessionStorage.getItem("_ici_tok") || "";
+
 export function Provider({ children }) {
-  // Initialise la page depuis l'URL du navigateur au chargement
-  const [page,setPage]       = useState(() => pathnameToPage(window.location.pathname));
-  const [bienId,setBienId]   = useState(() => {
-    const m = window.location.pathname.match(/^\/bien\/(\d+)$/);
-    return m ? +m[1] : null;
-  });
-  // Plus de token côté client — le cookie HttpOnly est géré automatiquement par le navigateur.
-  const [user,setUser]       = useState(null);
-  const [biens,setBiens]     = useState([]);
-  const [clients,setClients] = useState([]);
-  const [loyers,setLoyers]   = useState([]);
-  const [ventes,setVentes]   = useState([]);
+  const [page,setPage]     = useState(()=>pathnameToPage(window.location.pathname));
+  const [bienId,setBienId] = useState(()=>{ const m=window.location.pathname.match(/^\/bien\/(\d+)$/); return m?+m[1]:null; });
+  const [user,setUser]     = useState(null);
+  const [biens,setBiens]   = useState([]);
+  const [clients,setClients]   = useState([]);
+  const [loyers,setLoyers]     = useState([]);
+  const [ventes,setVentes]     = useState([]);
   const [demandes,setDemandes] = useState([]);
   const [contrats,setContrats] = useState([]);
   const [visites,setVisites]   = useState([]);
-  const [online,setOnline]   = useState(false);
-  const [toast,setToast]     = useState(null);
+  const [online,setOnline] = useState(false);
+  const [toast,setToast]   = useState(null);
 
   const showToast = useCallback((msg,type="ok")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),4500); },[]);
+
   const goTo = (p,id=null)=>{
     const newPath = pageToPathname(p);
-    // Synchroniser l'URL du navigateur sans rechargement de page.
-    // pushState ajoute une entrée dans l'historique (bouton Retour fonctionnel).
-    if (window.location.pathname !== newPath) {
-      window.history.pushState({ page: p }, "", newPath);
-    }
+    if (window.location.pathname!==newPath) window.history.pushState({page:p},"",newPath);
     setPage(p);
-    if(id !== null) setBienId(id);
+    if(id!==null) setBienId(id);
     window.scrollTo(0,0);
   };
 
-  // Helper requête API — lève une erreur lisible si le backend refuse (403/401/etc.)
-  // credentials:"include" envoie automatiquement le cookie HttpOnly à chaque requête.
-  // Le token n'est plus stocké ni manipulé côté JavaScript.
   const api = useCallback(async(method,path,body)=>{
     const headers = {"Content-Type":"application/json"};
+    if (_memToken) headers.Authorization = `Bearer ${_memToken}`;
     const r = await fetch(`${API}${path}`,{
-      method, headers, credentials:"include",
-      body:body?JSON.stringify(body):undefined
+      method, headers,
+      body: body?JSON.stringify(body):undefined
     });
     const d = await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(d.error||"Erreur serveur");
     return d;
   },[]);
 
-  // Vérifie la permission front ET affiche un toast clair avant même d'appeler l'API.
-  // N'empêche pas un contournement technique (le backend reste la vraie garde),
-  // mais évite des appels inutiles et donne un message immédiat à l'utilisateur.
-  const guard = useCallback((moduleName) => {
+  const guard = useCallback((moduleName)=>{
     if (!canWrite(user?.role, moduleName)) {
-      showToast(`Votre rôle (${user?.role||"inconnu"}) n'a pas accès en écriture à "${moduleName}".`, "warn");
+      showToast(`Votre rôle (${user?.role||"inconnu"}) n'a pas accès à "${moduleName}".`,"warn");
       return false;
     }
     return true;
-  }, [user, showToast]);
+  },[user,showToast]);
 
-  // Écoute le bouton Retour/Avance du navigateur pour synchroniser l'état
-  // React avec l'URL que le navigateur a restaurée via l'historique.
   useEffect(()=>{
-    const onPopState = () => {
+    const onPopState = ()=>{
       const p = pathnameToPage(window.location.pathname);
       const m = window.location.pathname.match(/^\/bien\/(\d+)$/);
-      setPage(p);
-      if(m) setBienId(+m[1]);
+      setPage(p); if(m) setBienId(+m[1]);
     };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+    window.addEventListener("popstate",onPopState);
+    return ()=>window.removeEventListener("popstate",onPopState);
+  },[]);
 
   useEffect(()=>{
-    fetch(`${API}/health`,{credentials:"include"}).then(r=>{
-      if(r.ok){
-        setOnline(true);
-        fetch(`${API}/biens`,{credentials:"include"}).then(r=>r.json()).then(d=>{ if(d.biens) setBiens(d.biens); }).catch(()=>{});
-      }
-    }).catch(()=>setOnline(false));
+    fetch(`${API}/health`).then(r=>{ if(r.ok){ setOnline(true); fetch(`${API}/biens`).then(r=>r.json()).then(d=>{if(d.biens)setBiens(d.biens);}).catch(()=>{}); } }).catch(()=>setOnline(false));
+  },[]);
+
+  // Restaurer session depuis token stocké
+  useEffect(()=>{
+    if(user||!_memToken) return;
+    fetch(`${API}/auth/me`,{headers:{Authorization:`Bearer ${_memToken}`}})
+    .then(r=>r.ok?r.json():null)
+    .then(u=>{ if(u&&u.id){ setUser(u); setOnline(true); } })
+    .catch(()=>{});
   },[]);
 
   const loadAdmin = useCallback(async()=>{
@@ -151,226 +123,72 @@ export function Provider({ children }) {
       ]);
       if(c)setClients(c); if(l)setLoyers(l); if(v)setVentes(v);
       if(d)setDemandes(d); if(ct)setContrats(ct); if(vi)setVisites(vi);
-    } catch(e) { showToast(e.message,"warn"); }
+    } catch(e){ showToast(e.message,"warn"); }
   },[api,online,showToast]);
 
   useEffect(()=>{ if(page==="admin") loadAdmin(); },[page]);
 
-  // Récupère le profil courant dès qu'un token est disponible.
-  // Restaurer la session au chargement — le cookie HttpOnly est envoyé
-  // automatiquement, le frontend n'a pas besoin de connaître le token.
-  useEffect(()=>{
-    if(user) return;
-    fetch(`${API}/auth/me`, { credentials:"include" })
-    .then(r => r.ok ? r.json() : null)
-    .then(u => { if(u && u.id) { setUser(u); setOnline(true); } })
-    .catch(() => {});
-  },[]);
-
   const login = async(email,pwd)=>{
-    const d = await api("POST","/auth/login",{email,password:pwd});
-    // Le backend a posé le cookie HttpOnly — on récupère juste le profil.
+    const headers = {"Content-Type":"application/json"};
+    const r = await fetch(`${API}/auth/login`,{method:"POST",headers,body:JSON.stringify({email,password:pwd})});
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.error||"Identifiants incorrects");
+    // Stocker le token pour les requêtes suivantes
+    _memToken = d.token;
+    sessionStorage.setItem("_ici_tok", d.token);
     setUser(d.user);
     goTo("admin"); showToast("Connexion réussie");
   };
-  const logout = async() => {
-    try { await api("POST","/auth/logout"); } catch {}
+
+  const logout = async()=>{
+    _memToken = "";
+    sessionStorage.removeItem("_ici_tok");
     setUser(null);
     goTo("accueil");
   };
 
-  // Upload photos base64
-  const uploadPhotos = async(bId,files) => {
+  const uploadPhotos = async(bId,files)=>{
     if(!guard("biens")) return;
-    const images = await Promise.all(Array.from(files).map(f=>new Promise((res,rej)=>{
-      const r=new FileReader(); r.onload=e=>res({name:f.name,type:f.type,data:e.target.result}); r.onerror=rej; r.readAsDataURL(f);
-    })));
+    const images = await Promise.all(Array.from(files).map(f=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>res({name:f.name,type:f.type,data:e.target.result}); r.onerror=rej; r.readAsDataURL(f); })));
     const result = await api("POST",`/biens/${bId}/photos/base64`,{images});
     setBiens(p=>p.map(b=>b.id===bId?{...b,photos:[...(b.photos||[]),...result.photos]}:b));
     showToast(`${result.photos.length} photo(s) ajoutée(s)`);
   };
-  const deletePhoto = async(bId,photoId) => {
-    if(!guard("biens")) return;
-    await api("DELETE",`/biens/${bId}/photos/${photoId}`);
-    setBiens(p=>p.map(b=>b.id===bId?{...b,photos:(b.photos||[]).filter(ph=>ph.id!==photoId)}:b));
-    showToast("Photo supprimée","warn");
-  };
-
-  // ── BIENS ────────────────────────────────────────────────────
-  const addBien = async d => {
-    if(!guard("biens")) return;
-    const b = await api("POST","/biens",d);
-    setBiens(p=>[b,...p]);
-    showToast("Bien publié");
-  };
-  const updateBien = async(id,d) => {
-    if(!guard("biens")) return;
-    const b = await api("PUT",`/biens/${id}`,d);
-    setBiens(p=>p.map(x=>x.id===id?{...x,...b}:x));
-    showToast("Mis à jour");
-  };
-  const deleteBien = async id => {
-    if(!guard("biens")) return;
-    await api("DELETE",`/biens/${id}`);
-    setBiens(p=>p.filter(x=>x.id!==id));
-    showToast("Supprimé","warn");
-  };
-
-  // ── CLIENTS ──────────────────────────────────────────────────
-  const addClient = async d => {
-    if(!guard("clients")) return;
-    const c = await api("POST","/clients",d);
-    setClients(p=>[c,...p]);
-    // Le bien peut avoir changé de statut côté backend (sync auto loué/disponible) — on recharge.
-    if(online) fetch(`${API}/biens`,{credentials:"include"}).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{});
-    showToast("Client ajouté");
-  };
-  const updateClient = async(id,d) => {
-    if(!guard("clients")) return;
-    const c = await api("PUT",`/clients/${id}`,d);
-    setClients(p=>p.map(x=>x.id===id?c:x));
-    if(online) fetch(`${API}/biens`,{credentials:"include"}).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{});
-    showToast("Mis à jour");
-  };
-  const deleteClient = async id => {
-    if(!guard("clients")) return;
-    await api("DELETE",`/clients/${id}`);
-    setClients(p=>p.filter(x=>x.id!==id));
-    if(online) fetch(`${API}/biens`,{credentials:"include"}).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{});
-    showToast("Supprimé","warn");
-  };
-
-  // ── LOYERS ───────────────────────────────────────────────────
-  const addLoyer = async d => {
-    if(!guard("loyers")) return;
-    const l = await api("POST","/loyers",d);
-    setLoyers(p=>[l,...p]);
-    showToast("Loyer enregistré");
-  };
-  const payerLoyer = async(id,modePaiement,montantRecu) => {
-    if(!guard("loyers")) return;
-    const l = await api("PUT",`/loyers/${id}/payer`,{modePaiement,montantRecu});
-    setLoyers(p=>p.map(x=>x.id===id?{...x,...l}:x));
-    showToast("Loyer marqué payé");
-  };
-  const relancerLoyer = async(id,canal) => {
-    if(!guard("loyers")) return;
-    return await api("POST",`/loyers/${id}/relancer`,{canal});
-  };
-  const genererMoisLoyers = async mois => {
-    if(!guard("loyers")) return;
-    const r = await api("POST","/loyers/generer-mois",{mois});
-    await loadAdmin();
-    showToast(`${r.crees} loyer(s) créé(s)`);
-  };
-  const deleteLoyer = async id => {
-    if(!guard("loyers")) return;
-    await api("DELETE",`/loyers/${id}`);
-    setLoyers(p=>p.filter(x=>x.id!==id));
-    showToast("Loyer supprimé","warn");
-  };
-
-  // ── VENTES ───────────────────────────────────────────────────
-  const addVente = async d => {
-    if(!guard("ventes")) return;
-    const v = await api("POST","/ventes",d);
-    setVentes(p=>[v,...p]);
-    if(online) fetch(`${API}/biens`,{credentials:"include"}).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{});
-    showToast("Vente créée");
-  };
-  const updateVente = async(id,d) => {
-    if(!guard("ventes")) return;
-    const v = await api("PUT",`/ventes/${id}`,d);
-    setVentes(p=>p.map(x=>x.id===id?v:x));
-    if(online) fetch(`${API}/biens`,{credentials:"include"}).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{});
-    showToast("Vente mise à jour");
-  };
-  const addPaiementVente = async(venteId,d) => {
-    if(!guard("ventes")) return;
-    const v = await api("POST",`/ventes/${venteId}/paiements`,d);
-    setVentes(p=>p.map(x=>x.id===venteId?v:x));
-    showToast("Paiement enregistré");
-  };
-  const deleteVente = async id => {
-    if(!guard("ventes")) return;
-    await api("DELETE",`/ventes/${id}`);
-    setVentes(p=>p.filter(x=>x.id!==id));
-    if(online) fetch(`${API}/biens`,{credentials:"include"}).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{});
-    showToast("Supprimé","warn");
-  };
-
-  // ── DEMANDES ─────────────────────────────────────────────────
-  // submitDemande reste accessible sans connexion (formulaire public du site)
-  const submitDemande = async d => {
-    const nd = await api("POST","/demandes",d);
-    setDemandes(p=>[nd,...p]);
-    showToast("Demande envoyée — réponse sous 24h");
-  };
-  const updateDemande = async(id,d) => {
-    if(!guard("demandes")) return;
-    const statut = d.statut;
-    const nd = await api("PUT",`/demandes/${id}/statut`,{statut});
-    setDemandes(p=>p.map(x=>x.id===id?nd:x));
-    showToast("Mis à jour");
-  };
-  // archiveDemande supprime réellement côté backend (corrigé : avant ça ne faisait
-  // que retirer la ligne de l'état local sans toucher la base).
-  const archiveDemande = async id => {
-    if(!guard("demandes")) return;
-    await api("DELETE",`/demandes/${id}`);
-    setDemandes(p=>p.filter(x=>x.id!==id));
-    showToast("Demande archivée","warn");
-  };
-
-  // ── CONTRATS ─────────────────────────────────────────────────
-  const addContrat = async d => {
-    if(!guard("contrats")) return;
-    const c = await api("POST","/contrats",d);
-    setContrats(p=>[c,...p]);
-    if(online) fetch(`${API}/biens`,{credentials:"include"}).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{});
-    showToast("Contrat créé");
-  };
-  const updateContrat = async(id,d) => {
-    if(!guard("contrats")) return;
-    const c = await api("PUT",`/contrats/${id}`,d);
-    setContrats(p=>p.map(x=>x.id===id?{...x,...c}:x));
-    showToast("Mis à jour");
-  };
-
-  // ── VISITES ──────────────────────────────────────────────────
-  const addVisite = async d => {
-    if(!guard("visites")) return;
-    const v = await api("POST","/visites",d);
-    setVisites(p=>[v,...p]);
-    showToast("Visite planifiée");
-  };
-  const updateVisite = async(id,d) => {
-    if(!guard("visites")) return;
-    const v = await api("PUT",`/visites/${id}`,d);
-    setVisites(p=>p.map(x=>x.id===id?{...x,...v}:x));
-    showToast("Mis à jour");
-  };
-  // deleteVisite renommé en intention : annule réellement la visite côté backend
-  // (avant : suppression locale uniquement, perdue au reload).
-  const deleteVisite = async id => {
-    if(!guard("visites")) return;
-    await api("DELETE",`/visites/${id}`);
-    setVisites(p=>p.filter(x=>x.id!==id));
-    showToast("Visite annulée","warn");
-  };
+  const deletePhoto = async(bId,photoId)=>{ if(!guard("biens")) return; await api("DELETE",`/biens/${bId}/photos/${photoId}`); setBiens(p=>p.map(b=>b.id===bId?{...b,photos:(b.photos||[]).filter(ph=>ph.id!==photoId)}:b)); showToast("Photo supprimée","warn"); };
+  const addBien = async d=>{ if(!guard("biens")) return; const b=await api("POST","/biens",d); setBiens(p=>[b,...p]); showToast("Bien publié"); };
+  const updateBien = async(id,d)=>{ if(!guard("biens")) return; const b=await api("PUT",`/biens/${id}`,d); setBiens(p=>p.map(x=>x.id===id?{...x,...b}:x)); showToast("Mis à jour"); };
+  const deleteBien = async id=>{ if(!guard("biens")) return; await api("DELETE",`/biens/${id}`); setBiens(p=>p.filter(x=>x.id!==id)); showToast("Supprimé","warn"); };
+  const addClient = async d=>{ if(!guard("clients")) return; const c=await api("POST","/clients",d); setClients(p=>[c,...p]); fetch(`${API}/biens`).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{}); showToast("Client ajouté"); };
+  const updateClient = async(id,d)=>{ if(!guard("clients")) return; const c=await api("PUT",`/clients/${id}`,d); setClients(p=>p.map(x=>x.id===id?c:x)); fetch(`${API}/biens`).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{}); showToast("Mis à jour"); };
+  const deleteClient = async id=>{ if(!guard("clients")) return; await api("DELETE",`/clients/${id}`); setClients(p=>p.filter(x=>x.id!==id)); fetch(`${API}/biens`).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{}); showToast("Supprimé","warn"); };
+  const addLoyer = async d=>{ if(!guard("loyers")) return; const l=await api("POST","/loyers",d); setLoyers(p=>[l,...p]); showToast("Loyer enregistré"); };
+  const payerLoyer = async(id,modePaiement,montantRecu)=>{ if(!guard("loyers")) return; const l=await api("PUT",`/loyers/${id}/payer`,{modePaiement,montantRecu}); setLoyers(p=>p.map(x=>x.id===id?{...x,...l}:x)); showToast("Loyer marqué payé"); };
+  const relancerLoyer = async(id,canal)=>{ if(!guard("loyers")) return; return await api("POST",`/loyers/${id}/relancer`,{canal}); };
+  const genererMoisLoyers = async mois=>{ if(!guard("loyers")) return; const r=await api("POST","/loyers/generer-mois",{mois}); await loadAdmin(); showToast(`${r.crees} loyer(s) créé(s)`); };
+  const deleteLoyer = async id=>{ if(!guard("loyers")) return; await api("DELETE",`/loyers/${id}`); setLoyers(p=>p.filter(x=>x.id!==id)); showToast("Loyer supprimé","warn"); };
+  const addVente = async d=>{ if(!guard("ventes")) return; const v=await api("POST","/ventes",d); setVentes(p=>[v,...p]); fetch(`${API}/biens`).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{}); showToast("Vente créée"); };
+  const updateVente = async(id,d)=>{ if(!guard("ventes")) return; const v=await api("PUT",`/ventes/${id}`,d); setVentes(p=>p.map(x=>x.id===id?v:x)); fetch(`${API}/biens`).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{}); showToast("Vente mise à jour"); };
+  const addPaiementVente = async(venteId,d)=>{ if(!guard("ventes")) return; const v=await api("POST",`/ventes/${venteId}/paiements`,d); setVentes(p=>p.map(x=>x.id===venteId?v:x)); showToast("Paiement enregistré"); };
+  const deleteVente = async id=>{ if(!guard("ventes")) return; await api("DELETE",`/ventes/${id}`); setVentes(p=>p.filter(x=>x.id!==id)); fetch(`${API}/biens`).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{}); showToast("Supprimé","warn"); };
+  const submitDemande = async d=>{ const nd=await api("POST","/demandes",d); setDemandes(p=>[nd,...p]); showToast("Demande envoyée — réponse sous 24h"); };
+  const updateDemande = async(id,d)=>{ if(!guard("demandes")) return; const nd=await api("PUT",`/demandes/${id}/statut`,{statut:d.statut}); setDemandes(p=>p.map(x=>x.id===id?nd:x)); showToast("Mis à jour"); };
+  const archiveDemande = async id=>{ if(!guard("demandes")) return; await api("DELETE",`/demandes/${id}`); setDemandes(p=>p.filter(x=>x.id!==id)); showToast("Demande archivée","warn"); };
+  const addContrat = async d=>{ if(!guard("contrats")) return; const c=await api("POST","/contrats",d); setContrats(p=>[c,...p]); fetch(`${API}/biens`).then(r=>r.json()).then(r=>{if(r.biens)setBiens(r.biens);}).catch(()=>{}); showToast("Contrat créé"); };
+  const updateContrat = async(id,d)=>{ if(!guard("contrats")) return; const c=await api("PUT",`/contrats/${id}`,d); setContrats(p=>p.map(x=>x.id===id?{...x,...c}:x)); showToast("Mis à jour"); };
+  const addVisite = async d=>{ if(!guard("visites")) return; const v=await api("POST","/visites",d); setVisites(p=>[v,...p]); showToast("Visite planifiée"); };
+  const updateVisite = async(id,d)=>{ if(!guard("visites")) return; const v=await api("PUT",`/visites/${id}`,d); setVisites(p=>p.map(x=>x.id===id?{...x,...v}:x)); showToast("Mis à jour"); };
+  const deleteVisite = async id=>{ if(!guard("visites")) return; await api("DELETE",`/visites/${id}`); setVisites(p=>p.filter(x=>x.id!==id)); showToast("Visite annulée","warn"); };
 
   const value = {
     page,goTo,bienId,user,login,logout,online,
-    canWrite: (moduleName) => canWrite(user?.role, moduleName),
-    biens,clients,loyers,ventes,demandes,contrats,visites,
-    showToast,
+    canWrite:(moduleName)=>canWrite(user?.role,moduleName),
+    biens,clients,loyers,ventes,demandes,contrats,visites,showToast,
     addBien,updateBien,deleteBien,uploadPhotos,deletePhoto,
     addClient,updateClient,deleteClient,
     addLoyer,payerLoyer,relancerLoyer,genererMoisLoyers,deleteLoyer,
     addVente,updateVente,addPaiementVente,deleteVente,
     submitDemande,updateDemande,archiveDemande,
-    addContrat,updateContrat,
-    addVisite,updateVisite,deleteVisite,
+    addContrat,updateContrat,addVisite,updateVisite,deleteVisite,
   };
 
   return (
