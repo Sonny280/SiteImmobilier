@@ -38,7 +38,7 @@ router.get("/", auth, async (req, res) => {
   if (clientId) { sql += " AND l.clientId=?"; p.push(+clientId); }
   if (bienId)   { sql += " AND l.bienId=?";   p.push(+bienId); }
   sql += " ORDER BY l.mois DESC, l.echeance ASC";
-  res.json((await prepare(sql).all(...p)).map(enrich));
+  res.json(await Promise.all((await prepare(sql).all(...p)).map(enrich)));
 });
 
 // GET /api/loyers/retards — loyers en retard
