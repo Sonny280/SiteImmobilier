@@ -133,10 +133,26 @@ export function Provider({ children }) {
     const r = await fetch(`${API}/auth/login`,{method:"POST",headers,body:JSON.stringify({email,password:pwd})});
     const d = await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(d.error||"Identifiants incorrects");
-    // Stocker le token pour les requêtes suivantes
     _memToken = d.token;
     sessionStorage.setItem("_ici_tok", d.token);
     setUser(d.user);
+    // Charger les données admin immédiatement avec le nouveau token
+    try {
+      const [c,l,v,dem,ct,vi] = await Promise.all([
+        fetch(`${API}/clients`,{headers:{Authorization:`Bearer ${d.token}`}}).then(r=>r.json()),
+        fetch(`${API}/loyers`,{headers:{Authorization:`Bearer ${d.token}`}}).then(r=>r.json()),
+        fetch(`${API}/ventes`,{headers:{Authorization:`Bearer ${d.token}`}}).then(r=>r.json()),
+        fetch(`${API}/demandes`,{headers:{Authorization:`Bearer ${d.token}`}}).then(r=>r.json()),
+        fetch(`${API}/contrats`,{headers:{Authorization:`Bearer ${d.token}`}}).then(r=>r.json()),
+        fetch(`${API}/visites`,{headers:{Authorization:`Bearer ${d.token}`}}).then(r=>r.json()),
+      ]);
+      if(Array.isArray(c))   setClients(c);
+      if(Array.isArray(l))   setLoyers(l);
+      if(Array.isArray(v))   setVentes(v);
+      if(Array.isArray(dem)) setDemandes(dem);
+      if(Array.isArray(ct))  setContrats(ct);
+      if(Array.isArray(vi))  setVisites(vi);
+    } catch(e) { console.warn("Chargement admin:", e.message); }
     goTo("admin"); showToast("Connexion réussie");
   };
 
