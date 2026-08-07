@@ -6,7 +6,7 @@ const path=require("path");
 const {initDb}=require("./config/database");
 
 const app=express();
-const PORT=process.env.PORT||8080;
+const PORT=process.env.PORT||3001;
 const isProd = process.env.NODE_ENV === "production";
 
 // ── 1. Forcer HTTPS en production ─────────────────────────────────
@@ -46,17 +46,18 @@ app.use((req, res, next) => {
 
 app.use(cors({
   origin: function(origin, callback) {
-    // Accepte toutes les origines localhost (5173, 5174, 5175, 3000…)
-    // et les origines de production définies dans FRONTEND_URL
-    if (!origin) return callback(null, true); // requêtes sans origin (Postman, curl)
+    if (!origin) return callback(null, true);
     const allowed = [
       /^http:\/\/localhost:\d+$/,
       /^http:\/\/127\.0\.0\.1:\d+$/,
+      /\.vercel\.app$/,
+      /\.railway\.app$/,
     ];
     const extra = (process.env.FRONTEND_URL || "").split(",").map(u => u.trim()).filter(Boolean);
-    if (allowed.some(r => r.test(origin)) || extra.includes(origin)) {
+    if (allowed.some(r => typeof r === 'string' ? r === origin : r.test(origin)) || extra.includes(origin)) {
       return callback(null, true);
     }
+    console.warn("CORS bloqué pour:", origin);
     return callback(new Error("CORS bloqué : " + origin));
   },
   credentials: true,
@@ -91,29 +92,12 @@ app.use((err,req,res,_)=>{
   if(err.code==="LIMIT_FILE_SIZE") return res.status(400).json({error:"Fichier trop volumineux (max 8Mo)"});
   res.status(err.status||500).json({error:err.message||"Erreur serveur"});
 });
-// Servir le frontend React
-const DIST = path.join(__dirname, "..", "frontend", "dist");
-if (require("fs").existsSync(DIST)) {
-  app.use(express.static(DIST));
-  app.get("*", (req, res) => {
-    if (!req.path.startsWith("/api") && !req.path.startsWith("/uploads")) {
-      res.sendFile(path.join(DIST, "index.html"));
-    }
-  });
-  console.log("✅ Frontend servi depuis", DIST);
-} else {
-  console.log("⚠️ Dossier frontend/dist introuvable");
-}
-
-
 
 initDb().then(()=>{
-  app.listen(PORT, "0.0.0.0", ()=>{
+  app.listen(PORT,()=>{
     console.log(`✅  ImmobilierCI API  →  http://localhost:${PORT}`);
     console.log(`📁  Photos  →  http://localhost:${PORT}/uploads`);
     if (isProd) console.log(`🔒  HTTPS forcé (NODE_ENV=production)`);
     else console.log(`⚠️  NODE_ENV n'est pas "production" — HTTPS non forcé. Mettez NODE_ENV=production sur votre hébergement.`);
   });
 }).catch(e=>{console.error("❌",e.message);process.exit(1);});
-
-
