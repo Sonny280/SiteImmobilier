@@ -20,7 +20,9 @@ export function AdminDashboard() {
 
   useEffect(() => {
     if (!online) return;
-    fetch(`${API}/stats`, { credentials:"include" })
+    const tok = sessionStorage.getItem("_ici_tok");
+    if (!tok) return;
+    fetch(`${API}/stats`, { headers: { Authorization: `Bearer ${tok}` } })
       .then(r=>r.json()).then(setStats).catch(()=>{});
   }, [online]);
 
@@ -1570,3 +1572,4 @@ export function AdminParams() {
     </div>
   </div>;
 }
+
