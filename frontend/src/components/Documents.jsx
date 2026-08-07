@@ -29,6 +29,12 @@ function formatSize(bytes) {
   return `${(bytes/1024/1024).toFixed(1)} Mo`;
 }
 
+// Helper pour récupérer le token JWT
+function getAuthHeader() {
+  const tok = sessionStorage.getItem("_ici_tok");
+  return tok ? { Authorization: `Bearer ${tok}` } : {};
+}
+
 export function DocumentsPanel({ entite, entiteId, titre }) {
   const {} = useCtx();
   const [docs,     setDocs]     = useState([]);
@@ -43,10 +49,12 @@ export function DocumentsPanel({ entite, entiteId, titre }) {
     setLoading(true);
     try {
       const r = await fetch(`${API}/documents?entite=${entite}&entiteId=${entiteId}`, {
-        credentials:"include"
+        headers: getAuthHeader()
       });
-      setDocs(await r.json());
-    } finally { setLoading(false); }
+      const data = await r.json();
+      setDocs(Array.isArray(data) ? data : []);
+    } catch { setDocs([]); }
+    finally { setLoading(false); }
   };
   useEffect(() => { if(entiteId) load(); }, [entiteId]);
 
@@ -56,7 +64,6 @@ export function DocumentsPanel({ entite, entiteId, titre }) {
     setUploading(true);
     try {
       for (const file of files) {
-        // Limite 10 Mo
         if (file.size > 10*1024*1024) { alert(`${file.name} : fichier trop lourd (max 10 Mo)`); continue; }
         const base64 = await new Promise((res,rej) => {
           const r = new FileReader();
@@ -66,15 +73,12 @@ export function DocumentsPanel({ entite, entiteId, titre }) {
         });
         await fetch(`${API}/documents`, {
           method: "POST",
-          headers:{"Content-Type":"application/json"}, credentials:"include",
+          headers: { "Content-Type":"application/json", ...getAuthHeader() },
           body: JSON.stringify({
-            nom: file.name,
-            type: typeSel,
+            nom: file.name, type: typeSel,
             entite, entiteId,
-            fichier: base64,
-            taille: file.size,
-            mimeType: file.type,
-            notes,
+            fichier: base64, taille: file.size,
+            mimeType: file.type, notes,
           }),
         });
       }
@@ -86,7 +90,7 @@ export function DocumentsPanel({ entite, entiteId, titre }) {
 
   const download = async (doc) => {
     const r = await fetch(`${API}/documents/${doc.id}/download`, {
-      credentials:"include"
+      headers: getAuthHeader()
     });
     const blob = await r.blob();
     const url  = URL.createObjectURL(blob);
@@ -97,7 +101,10 @@ export function DocumentsPanel({ entite, entiteId, titre }) {
 
   const del = async (doc) => {
     if (!confirm(`Supprimer "${doc.nom}" ?`)) return;
-    await fetch(`${API}/documents/${doc.id}`, { method:"DELETE", credentials:"include" });
+    await fetch(`${API}/documents/${doc.id}`, {
+      method:"DELETE",
+      headers: getAuthHeader()
+    });
     setDocs(p => p.filter(d => d.id !== doc.id));
   };
 
@@ -142,7 +149,7 @@ export function DocumentsPanel({ entite, entiteId, titre }) {
                   </button>
                   {d.mimeType?.startsWith("image/")&&(
                     <button onClick={async()=>{
-                      const r=await fetch(`${API}/documents/${d.id}/download`,{credentials:"include"});
+                      const r=await fetch(`${API}/documents/${d.id}/download`,{headers:getAuthHeader()});
                       const blob=await r.blob();
                       window.open(URL.createObjectURL(blob),"_blank");
                     }} style={{padding:"5px 10px",background:"var(--grayL)",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",fontSize:"11px",fontWeight:600}}>
@@ -160,7 +167,6 @@ export function DocumentsPanel({ entite, entiteId, titre }) {
         </div>
       )}
 
-      {/* Modal upload */}
       {modal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(92,26,43,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:"16px"}}>
           <div style={{background:"white",borderRadius:"16px",padding:"24px",maxWidth:"420px",width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.2)"}}>
@@ -200,3 +206,5 @@ export function DocumentsPanel({ entite, entiteId, titre }) {
     </div>
   );
 }
+
+
