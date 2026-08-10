@@ -1,99 +1,105 @@
-// AdminTemoignages.jsx — Modération des témoignages
+// AdminTemoignages.jsx
 import { useState, useEffect } from "react";
 import { useCtx } from "./context.jsx";
 import { API } from "./utils.js";
+import { Stars } from "./ui.jsx";
+
+function getAuthHeader() {
+  const tok = sessionStorage.getItem("_ici_tok");
+  return tok ? { Authorization: `Bearer ${tok}` } : {};
+}
 
 export function AdminTemoignages() {
   const {} = useCtx();
-  const [items, setItems] = useState([]);
+  const [items,   setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filtre, setFiltre] = useState("all");
+  const [filtre,  setFiltre]  = useState("all");
 
   const load = async () => {
     setLoading(true);
-    const r = await fetch(`${API}/temoignages/admin`, { credentials:"include" });
+    const r = await fetch(`${API}/temoignages/admin`, { headers: getAuthHeader() });
     const d = await r.json();
     setItems(Array.isArray(d) ? d : []);
     setLoading(false);
   };
-  useEffect(() => { load(); }, [token]);
+  useEffect(() => { load(); }, []);
 
   const setStatut = async (id, statut) => {
     const r = await fetch(`${API}/temoignages/${id}/statut`, {
-      method: "PUT", headers:{"Content-Type":"application/json"}, credentials:"include",
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getAuthHeader() },
       body: JSON.stringify({ statut }),
     });
     const updated = await r.json();
-    if (!r.ok) { alert(updated.error || "Erreur lors de la mise à jour"); return; }
+    if (!r.ok) { alert(updated.error || "Erreur"); return; }
     setItems(p => p.map(x => x.id === updated.id ? updated : x));
   };
 
   const del = async (id) => {
     if (!confirm("Supprimer ce témoignage ?")) return;
-    const r = await fetch(`${API}/temoignages/${id}`, { method: "DELETE", credentials:"include" });
-    if (!r.ok) {
-      const d = await r.json().catch(()=>({}));
-      alert(d.error || "Erreur lors de la suppression");
-      return;
-    }
+    const r = await fetch(`${API}/temoignages/${id}`, { method: "DELETE", headers: getAuthHeader() });
+    if (!r.ok) { alert("Erreur lors de la suppression"); return; }
     setItems(p => p.filter(x => x.id !== id));
   };
 
-  const stats = { total: items.length, publie: items.filter(x=>x.statut==="publie").length, attente: items.filter(x=>x.statut==="en_attente").length };
-  const affiches = filtre === "all" ? items : items.filter(x => x.statut === filtre);
+  const filtered = filtre === "all" ? items : items.filter(x => x.statut === filtre);
+  const BADGE = {
+    en_attente: { bg:"#fef3c7", color:"#92400e", label:"En attente" },
+    publie:     { bg:"#dcfce7", color:"#15803d", label:"Publié" },
+    refuse:     { bg:"#fee2e2", color:"#dc2626", label:"Refusé" },
+  };
 
   return (
     <div>
-      {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
-        {[{l:"Total",v:stats.total,bg:"var(--blueL)",c:"var(--blue2)"},{l:"Publiés",v:stats.publie,bg:"#dcfce7",c:"#15803d"},{l:"En attente",v:stats.attente,bg:"#fff7ed",c:"#c2410c"}].map(s=>(
-          <div key={s.l} style={{background:s.bg,borderRadius:"12px",padding:"14px 16px"}}>
-            <div style={{fontSize:"11px",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:s.c,marginBottom:"6px"}}>{s.l}</div>
-            <div style={{fontSize:"26px",fontWeight:700,color:s.c,fontFamily:"Playfair Display,serif"}}>{s.v}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Filtres */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-        {[["all","Tous"],["en_attente","En attente"],["publie","Publiés"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setFiltre(k)} style={{padding:"8px 16px",borderRadius:"8px",border:"none",cursor:"pointer",fontWeight:700,fontSize:"13px",fontFamily:"Plus Jakarta Sans,sans-serif",background:filtre===k?"var(--blue)":"var(--grayL)",color:filtre===k?"white":"var(--gray)"}}>
-            {l}{k==="en_attente"&&stats.attente>0&&` (${stats.attente})`}
+      <div style={{ display:"flex", gap:"8px", marginBottom:"20px", flexWrap:"wrap" }}>
+        {[["all","Tous"],["en_attente","En attente"],["publie","Publiés"],["refuse","Refusés"]].map(([v,l]) => (
+          <button key={v} onClick={()=>setFiltre(v)}
+            style={{ padding:"7px 16px", borderRadius:"20px", border:"1px solid var(--border)", cursor:"pointer", fontWeight: filtre===v ? 700 : 500, background: filtre===v ? "var(--blue)" : "white", color: filtre===v ? "white" : "var(--text)", fontSize:"13px", fontFamily:"Plus Jakarta Sans,sans-serif" }}>
+            {l} ({v==="all" ? items.length : items.filter(x=>x.statut===v).length})
           </button>
         ))}
       </div>
 
-      {/* Liste */}
       {loading ? <div style={{textAlign:"center",padding:"40px",color:"var(--gray)"}}>Chargement...</div>
-      : affiches.length === 0 ? <div style={{textAlign:"center",padding:"48px",background:"var(--off)",borderRadius:"16px",border:"1px solid var(--border)"}}>Aucun témoignage</div>
-      : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          {affiches.map(t => (
-            <div key={t.id} style={{background:"white",border:"1px solid var(--border)",borderRadius:"14px",padding:"16px 20px"}}>
-              <div style={{display:"flex",alignItems:"flex-start",gap:"12px",marginBottom:"10px"}}>
-                <div style={{width:"36px",height:"36px",borderRadius:"50%",background:"var(--blueL)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Playfair Display,serif",fontSize:"13px",fontWeight:700,color:"var(--blue2)",flexShrink:0}}>{t.nom.slice(0,2).toUpperCase()}</div>
-                <div style={{flex:1}}>
-                  <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px",flexWrap:"wrap"}}>
-                    <span style={{fontWeight:700,fontSize:"14px"}}>{t.nom}</span>
-                    {t.profession&&<span style={{fontSize:"12px",color:"var(--gray)"}}>{t.profession}</span>}
-                    <span style={{fontSize:"12px",color:"var(--gold)"}}>{("★").repeat(t.note)}</span>
-                    <span style={{fontSize:"11px",fontWeight:700,padding:"2px 8px",borderRadius:"100px",background:t.statut==="publie"?"#dcfce7":"#fff7ed",color:t.statut==="publie"?"#15803d":"#c2410c",marginLeft:"auto"}}>{t.statut==="publie"?"Publié":"En attente"}</span>
+      : filtered.length === 0 ? (
+        <div style={{textAlign:"center",padding:"60px",background:"var(--off)",borderRadius:"18px",border:"1px solid var(--border)"}}>
+          <div style={{fontSize:"48px",marginBottom:"12px"}}>⭐</div>
+          <p style={{fontWeight:700}}>Aucun témoignage</p>
+        </div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
+          {filtered.map(t => {
+            const badge = BADGE[t.statut] || BADGE.en_attente;
+            return (
+              <div key={t.id} style={{ background:"white", border:"1px solid var(--border)", borderRadius:"14px", padding:"16px 20px" }}>
+                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:"12px", marginBottom:"10px" }}>
+                  <div>
+                    <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"3px" }}>
+                      <span style={{ fontWeight:700, fontSize:"15px" }}>{t.nom}</span>
+                      <Stars n={t.note||5}/>
+                    </div>
+                    {t.profession && <div style={{ fontSize:"12px", color:"var(--gray)" }}>{t.profession}</div>}
+                    <div style={{ fontSize:"11px", color:"var(--gray)", marginTop:"2px" }}>{new Date(t.createdAt).toLocaleDateString("fr-FR")}</div>
                   </div>
-                  <p style={{fontSize:"13px",lineHeight:1.7,color:"var(--gray)",fontStyle:"italic"}}>"{t.texte}"</p>
-                  <div style={{fontSize:"11px",color:"var(--gray)",marginTop:"6px"}}>{new Date(t.createdAt).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}</div>
+                  <span style={{ padding:"4px 10px", borderRadius:"20px", fontSize:"11px", fontWeight:700, background:badge.bg, color:badge.color, flexShrink:0 }}>
+                    {badge.label}
+                  </span>
+                </div>
+                <p style={{ fontSize:"14px", lineHeight:1.6, marginBottom:"14px", fontStyle:"italic" }}>"{t.texte}"</p>
+                <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
+                  {t.statut !== "publie" && <button onClick={()=>setStatut(t.id,"publie")} style={{ padding:"7px 14px", border:"none", borderRadius:"8px", cursor:"pointer", fontWeight:700, fontSize:"12px", background:"#dcfce7", color:"#15803d", fontFamily:"Plus Jakarta Sans,sans-serif" }}>✅ Publier</button>}
+                  {t.statut !== "refuse" && <button onClick={()=>setStatut(t.id,"refuse")} style={{ padding:"7px 14px", border:"1px solid var(--border)", borderRadius:"8px", cursor:"pointer", fontWeight:700, fontSize:"12px", background:"white", color:"var(--gray)", fontFamily:"Plus Jakarta Sans,sans-serif" }}>🚫 Refuser</button>}
+                  {t.statut !== "en_attente" && <button onClick={()=>setStatut(t.id,"en_attente")} style={{ padding:"7px 14px", border:"1px solid var(--border)", borderRadius:"8px", cursor:"pointer", fontWeight:700, fontSize:"12px", background:"white", color:"var(--gray)", fontFamily:"Plus Jakarta Sans,sans-serif" }}>⏳ En attente</button>}
+                  <button onClick={()=>del(t.id)} style={{ padding:"7px 14px", border:"1px solid #fecaca", borderRadius:"8px", cursor:"pointer", fontWeight:700, fontSize:"12px", background:"#fef2f2", color:"#dc2626", fontFamily:"Plus Jakarta Sans,sans-serif" }}>🗑 Supprimer</button>
                 </div>
               </div>
-              <div style={{display:"flex",gap:"8px",borderTop:"1px solid var(--border)",paddingTop:"12px"}}>
-                {t.statut !== "publie"
-                  ? <button onClick={()=>setStatut(t.id,"publie")} style={{padding:"7px 16px",background:"#dcfce7",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>Publier</button>
-                  : <button onClick={()=>setStatut(t.id,"en_attente")} style={{padding:"7px 16px",background:"#fff7ed",color:"#c2410c",border:"1px solid #fed7aa",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>Dépublier</button>
-                }
-                <button onClick={()=>del(t.id)} style={{padding:"7px 16px",background:"#fef2f2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>Supprimer</button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
+
+
+
