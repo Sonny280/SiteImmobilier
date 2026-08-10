@@ -22,11 +22,12 @@ function PageServices({sub,setPage}){
     {slug:"terrain",titre:"Vente de Terrains",desc:"Terrains résidentiels, commerciaux et agricoles à Abidjan et à l'intérieur du pays — Bingerville, Bassam, Songon, Aboisso et bien d'autres. Vérification systématique des titres fonciers avant transaction.",avantages:["Titre foncier vérifié et authentifié","Zones résidentielles et commerciales","Abidjan et intérieur du pays","Sécurisation juridique complète"]},
   ];
   const typesMap = {gestion:"location",location:"location",meuble:"meuble",vente:"vente",terrain:"terrain"};
-  const biensAffiches = filtre==="all"?biens.filter(b=>b.statut==="disponible"):biens.filter(b=>b.statut==="disponible"&&{
-    if(filtre==="gestion") return b.type==="location";
-    return b.type===typesMap[filtre]||b.type===filtre;
-  });
-
+  const biensAffiches = biens.filter(b => {
+  if (b.statut !== "disponible") return false;
+  if (filtre === "all") return true;
+  if (filtre === "gestion") return b.type === "location";
+  return b.type === (typesMap[filtre] || filtre);
+});
   const send = async()=>{ if(!form.nom||!form.tel)return; try{await submitDemande(form);setSent(true);}catch{} };
 
   return(
