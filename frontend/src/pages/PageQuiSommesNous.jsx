@@ -3,6 +3,7 @@ import { AG } from "../utils.js";
 import { useSeo } from "../seo.js";
 import PageHero from "../components/PageHero.jsx";
 import { useSettings } from "../hooks/useSettings.js";
+import { useCtx } from "../context.jsx";
 import { API } from "../utils.js";
 
 const EQUIPE = [
@@ -12,7 +13,7 @@ const EQUIPE = [
   { key:"team_compta",  nom:"À compléter",           poste:"Comptable",              initiales:"CP" },
 ];
 
-function MembreCard({ membre, url, onUpload, onDelete }) {
+function MembreCard({ membre, url, onUpload, onDelete, isAdmin }) {
   const [uploading, setUploading] = useState(false);
 
   const handleUpload = async (e) => {
@@ -44,11 +45,13 @@ function MembreCard({ membre, url, onUpload, onDelete }) {
             </div>
           </div>
         )}
-        <label style={{position:"absolute",bottom:"8px",right:"8px",background:"rgba(0,0,0,0.55)",color:"white",borderRadius:"6px",padding:"4px 10px",fontSize:"11px",fontWeight:700,cursor:"pointer"}}>
-          {uploading ? "⏳" : "📷"} {url ? "Changer" : "Ajouter"}
-          <input type="file" accept="image/*" onChange={handleUpload} style={{display:"none"}} disabled={uploading}/>
-        </label>
-        {url && (
+        {isAdmin && (
+          <label style={{position:"absolute",bottom:"8px",right:"8px",background:"rgba(0,0,0,0.55)",color:"white",borderRadius:"6px",padding:"4px 10px",fontSize:"11px",fontWeight:700,cursor:"pointer"}}>
+            {uploading ? "⏳" : "📷"} {url ? "Changer" : "Ajouter"}
+            <input type="file" accept="image/*" onChange={handleUpload} style={{display:"none"}} disabled={uploading}/>
+          </label>
+        )}
+        {url && isAdmin && (
           <button onClick={()=>onDelete(membre.key)} style={{position:"absolute",top:"8px",right:"8px",background:"rgba(220,38,38,0.8)",color:"white",border:"none",borderRadius:"6px",padding:"4px 8px",fontSize:"11px",cursor:"pointer"}}>✕</button>
         )}
       </div>
@@ -63,6 +66,8 @@ function MembreCard({ membre, url, onUpload, onDelete }) {
 function PageQuiSommesNous(){
   useSeo("qui-sommes-nous");
   const { settings, uploadSetting, deleteSetting } = useSettings();
+  const { user } = useCtx();
+  const isAdmin = user?.role === "superadmin" || user?.role === "admin";
 
   return(
     <div>
@@ -94,6 +99,7 @@ function PageQuiSommesNous(){
                   ) : (
                     <div style={{width:"100px",height:"100px",borderRadius:"50%",background:"var(--gold)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Playfair Display,serif",fontSize:"28px",fontWeight:700,color:"var(--blue)"}}>KA</div>
                   )}
+                  {isAdmin && (
                   <label style={{position:"absolute",bottom:0,right:0,background:"rgba(0,0,0,0.6)",borderRadius:"50%",width:"28px",height:"28px",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"13px"}} title="Changer la photo">
                     📷
                     <input type="file" accept="image/*" onChange={async e=>{
@@ -101,6 +107,7 @@ function PageQuiSommesNous(){
                       await uploadSetting("team_dg",f); e.target.value="";
                     }} style={{display:"none"}}/>
                   </label>
+                  )}
                 </div>
                 <h3 style={{fontFamily:"Playfair Display,serif",fontSize:"22px",fontWeight:700,marginBottom:"6px"}}>Kouassi Atse Charles</h3>
                 <p style={{fontSize:"12px",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:"20px"}}>Directeur Général</p>
@@ -133,6 +140,7 @@ function PageQuiSommesNous(){
                 url={settings[m.key]}
                 onUpload={uploadSetting}
                 onDelete={deleteSetting}
+                isAdmin={isAdmin}
               />
             ))}
           </div>
@@ -187,3 +195,6 @@ function PageQuiSommesNous(){
 }
 
 export default PageQuiSommesNous;
+
+
+

@@ -315,7 +315,7 @@ function AdminLayout(){
                 + Bien
               </button>
             )}
-            <button onClick={logout} title="Se déconnecter"
+            <button onClick={()=>{ if(window.confirm("Voulez-vous vraiment vous déconnecter ?")) logout(); }} title="Se déconnecter"
               style={{
                 padding:"7px 14px", borderRadius:"8px", border:"1px solid #fecaca",
                 background:"#fef2f2", color:"#dc2626", cursor:"pointer",
