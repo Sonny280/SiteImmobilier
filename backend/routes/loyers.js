@@ -38,7 +38,7 @@ router.get("/", auth, async (req, res) => {
   if (clientId) { sql += " AND l.clientId=?"; p.push(+clientId); }
   if (bienId)   { sql += " AND l.bienId=?";   p.push(+bienId); }
   sql += " ORDER BY l.mois DESC, l.echeance ASC";
-  res.json(await Promise.all((await prepare(sql).all(...p)).map(enrich)));
+  res.json((await prepare(sql).all(...p)).map(enrich));
 });
 
 // GET /api/loyers/retards — loyers en retard
@@ -78,9 +78,15 @@ router.put("/:id/payer", auth, requireModule("loyers"), async (req, res) => {
   const { modePaiement, montantRecu } = req.body;
   const loyer = await prepare("SELECT * FROM loyers WHERE id=?").get(id);
   if (!loyer) return res.status(404).json({ error: "Loyer introuvable" });
+  // Validation : le montant reçu ne peut pas dépasser le montant dû
+  const mr = +montantRecu || loyer.montant;
+  if (mr <= 0) return res.status(400).json({ error: "Le montant reçu doit être supérieur à 0." });
+  if (mr > loyer.montant * 1.1) return res.status(400).json({
+    error: `Le montant reçu (${mr.toLocaleString("fr-CI")} FCFA) dépasse le loyer dû (${loyer.montant.toLocaleString("fr-CI")} FCFA). Vérifiez le montant.`
+  });
   const today = new Date().toISOString().split("T")[0];
   await prepare("UPDATE loyers SET statut='paye',datePaiement=?,montantRecu=?,modePaiement=?,joursRetard=?,penalite=0 WHERE id=?")
-    .run(today, +montantRecu||loyer.montant, modePaiement||"virement", await enrich(loyer).joursRetard, id);
+    .run(today, mr, modePaiement||"virement", await enrich(loyer).joursRetard, id);
   const updated = await prepare("SELECT * FROM loyers WHERE id=?").get(id);
   const client  = await prepare("SELECT * FROM clients WHERE id=?").get(loyer.clientId);
   const bien    = await prepare("SELECT * FROM biens WHERE id=?").get(loyer.bienId);
@@ -153,3 +159,4 @@ router.post("/generer-mois", auth, requireModule("loyers"), async (req, res) => 
 });
 
 module.exports = router;
+

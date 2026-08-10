@@ -192,5 +192,3 @@ function PageAccueil({setPage}){
 // ── BIEN CARD ──────────────────────────────────────────────────
 
 export default PageAccueil;
-
-

@@ -1562,7 +1562,54 @@ export function AdminVisites() {
 // ── PARAMÈTRES ────────────────────────────────────────────────
 export function AdminParams() {
   const {online} = useCtx();
+  const [logo, setLogo] = useState(localStorage.getItem("ag_logo")||"");
+  const [saving, setSaving] = useState(false);
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2*1024*1024) { alert("Logo trop lourd (max 2 Mo)"); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const url = ev.target.result;
+      setLogo(url);
+      localStorage.setItem("ag_logo", url);
+      alert("Logo enregistré — il apparaîtra sur tous vos reçus.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeLogo = () => {
+    setLogo("");
+    localStorage.removeItem("ag_logo");
+  };
+
   return <div className="max-w-2xl space-y-5">
+    {/* Logo agence */}
+    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+      <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4">Logo de l'agence</h3>
+      <p className="text-xs text-gray-500 mb-4">Ce logo apparaîtra sur tous vos reçus et documents imprimés. Format recommandé : PNG transparent, max 2 Mo.</p>
+      {logo ? (
+        <div style={{display:"flex",alignItems:"center",gap:"16px",marginBottom:"12px"}}>
+          <img src={logo} alt="Logo" style={{height:"60px",maxWidth:"200px",objectFit:"contain",border:"1px solid var(--border)",borderRadius:"8px",padding:"8px",background:"white"}}/>
+          <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+            <label style={{padding:"8px 16px",background:"var(--blue)",color:"white",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+              Changer le logo
+              <input type="file" accept="image/*" onChange={handleLogoUpload} style={{display:"none"}}/>
+            </label>
+            <button onClick={removeLogo} style={{padding:"8px 16px",border:"1px solid #fecaca",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:700,color:"#dc2626",background:"#fef2f2",fontFamily:"Plus Jakarta Sans,sans-serif"}}>Supprimer</button>
+          </div>
+        </div>
+      ) : (
+        <label style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"8px",padding:"24px",border:"2px dashed var(--border)",borderRadius:"10px",cursor:"pointer",background:"var(--off)"}}>
+          <span style={{fontSize:"32px"}}>🖼️</span>
+          <span style={{fontSize:"14px",fontWeight:600,color:"var(--blue)"}}>Cliquer pour ajouter votre logo</span>
+          <span style={{fontSize:"11px",color:"var(--gray)"}}>PNG, JPG, SVG · Max 2 Mo</span>
+          <input type="file" accept="image/*" onChange={handleLogoUpload} style={{display:"none"}}/>
+        </label>
+      )}
+    </div>
+
     <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
       <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4">Statut du système</h3>
       <div className="flex items-center gap-3 mb-3"><div className={`w-3 h-3 rounded-full flex-shrink-0 ${online?"bg-emerald-500 animate-pulse":"bg-red-500"}`}/><span className="text-sm font-medium">{online?"Backend connecté — données en temps réel":"Backend hors-ligne — aucune action possible"}</span></div>
@@ -1581,4 +1628,3 @@ export function AdminParams() {
     </div>
   </div>;
 }
-

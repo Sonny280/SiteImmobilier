@@ -53,10 +53,13 @@ export function genererQuittanceLoyer({ loyer, client, bien }) {
   const html = `
     <div class="header">
       <div class="logo-block">
-        <div class="name">ImmobilierCI</div>
+        ${AG.logo
+          ? `<img src="${AG.logo}" alt="ImmobilierCI" style="height:60px;max-width:200px;object-fit:contain;margin-bottom:8px;display:block;"/>`
+          : `<div class="name">ImmobilierCI</div>`
+        }
         <div class="tagline">${AG.slogan}</div>
         <div class="contact">
-          ${AG.tel1} · ${AG.tel2}<br/>
+          ${AG.tel1}${AG.tel2 && AG.tel2 !== AG.tel1 ? ' · ' + AG.tel2 : ''}<br/>
           ${AG.email}<br/>
           ${AG.adresse}
         </div>
@@ -131,9 +134,12 @@ export function genererRecuVente({ vente, paiement, bien }) {
   const html = `
     <div class="header">
       <div class="logo-block">
-        <div class="name">ImmobilierCI</div>
+        ${AG.logo
+          ? `<img src="${AG.logo}" alt="ImmobilierCI" style="height:60px;max-width:200px;object-fit:contain;margin-bottom:8px;display:block;"/>`
+          : `<div class="name">ImmobilierCI</div>`
+        }
         <div class="tagline">${AG.slogan}</div>
-        <div class="contact">${AG.tel1} · ${AG.tel2}<br/>${AG.email}<br/>${AG.adresse}</div>
+        <div class="contact">${AG.tel1}${AG.tel2 && AG.tel2 !== AG.tel1 ? ' · ' + AG.tel2 : ''}<br/>${AG.email}<br/>${AG.adresse}</div>
       </div>
       <div style="text-align:right;">
         <div class="badge">REÇU DE PAIEMENT<div class="ref">${num}</div></div>
@@ -199,3 +205,4 @@ export function genererRecuVente({ vente, paiement, bien }) {
     </div>`;
   imprimerRecu(html);
 }
+
