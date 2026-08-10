@@ -113,7 +113,7 @@ function PageAccueil({setPage}){
             <h2 style={{fontSize:"clamp(24px,6vw,38px)",fontWeight:700}} className="title-ul-c">Une offre complète pour votre patrimoine</h2>
             <div className="divider-gold" style={{margin:"18px auto 0"}}/>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:"24px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"24px",maxWidth:"900px",margin:"0 auto"}}>
             {[
               {icon:"L",titre:"Gestion Locative",desc:"Recherche de locataires, suivi des loyers, états des lieux, renouvellements.",slug:"gestion"},
               {icon:"V",titre:"Vente Immobilière",desc:"Estimation gratuite, négociation, accompagnement jusqu'à l'acte notarié.",slug:"vente"},
@@ -121,7 +121,8 @@ function PageAccueil({setPage}){
               {icon:"N",titre:"Location Non Meublée",desc:"Appartements et villas en location mensuelle longue durée.",slug:"location"},
               {icon:"T",titre:"Vente de Terrains",desc:"Terrains à Abidjan et à l'intérieur du pays. Vérification des titres fonciers.",slug:"terrain"},
             ].map((s,i)=>(
-              <div key={s.slug} data-anim="scaleUp" data-delay={i*100} onClick={()=>nav(`services-${s.slug}`)} className="card" style={{padding:"clamp(18px,4vw,32px)",cursor:"pointer"}}>
+              <div key={s.slug} data-anim="scaleUp" data-delay={i*100} onClick={()=>nav(`services-${s.slug}`)} className="card"
+                style={{padding:"clamp(18px,4vw,32px)",cursor:"pointer",gridColumn: i===3?"2/3": i===4?"3/4":"auto"}}>
                 <div style={{width:"52px",height:"52px",borderRadius:"12px",background:"var(--blueL)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:"20px"}}>
                   <span style={{fontFamily:"Playfair Display,serif",fontSize:"22px",fontWeight:700,color:"var(--blue2)"}}>{s.icon}</span>
                 </div>
