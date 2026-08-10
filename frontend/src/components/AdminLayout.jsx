@@ -19,7 +19,7 @@ const ADMIN_TABS = [
   { id:"biens",        l:"Biens",            icon:"🏠", section:"main" },
   { id:"clients",      l:"Clients",          icon:"👥", section:"main" },
   // Section financière
-  // { id:"loyers",       l:"Loyers",           icon:"💰", section:"finance" },
+  { id:"loyers",       l:"Loyers",           icon:"💰", section:"finance" },
   { id:"ventes",       l:"Ventes",           icon:"🤝", section:"finance" },
   { id:"contrats",     l:"Contrats",         icon:"📄", section:"finance" },
   // Section commercial
@@ -27,7 +27,7 @@ const ADMIN_TABS = [
   { id:"visites",      l:"Agenda visites",   icon:"📅", section:"commercial" },
   // Section vitrine
   // { id:"blog",         l:"Blog",             icon:"✏️",  section:"vitrine" },
-  // { id:"temoignages",  l:"Témoignages",      icon:"⭐",  section:"vitrine" },
+  { id:"temoignages",  l:"Témoignages",      icon:"⭐",  section:"vitrine" },
   { id:"realisations", l:"Réalisations",     icon:"🏆", section:"vitrine" },
   // Section compte
   { id:"utilisateurs", l:"Utilisateurs",     icon:"🔐", section:"compte" },
@@ -47,13 +47,13 @@ const TAB_ROLES = {
   dashboard:    ["superadmin","admin","commercial","comptable","lecture"],
   biens:        ["superadmin","admin","commercial","lecture"],
   clients:      ["superadmin","admin","commercial","lecture"],
-  // loyers:       ["superadmin","admin","comptable","lecture"],
+  loyers:       ["superadmin","admin","comptable","lecture"],
   ventes:       ["superadmin","admin","comptable","lecture"],
   demandes:     ["superadmin","admin","commercial","lecture"],
   contrats:     ["superadmin","admin","commercial","comptable","lecture"],
   visites:      ["superadmin","admin","commercial","lecture"],
   // blog:         ["superadmin","admin"],
-  // temoignages:  ["superadmin","admin"],
+  temoignages:  ["superadmin","admin"],
   realisations: ["superadmin","admin"],
   utilisateurs: ["superadmin"],
   monprofil:    ["superadmin","admin","commercial","comptable","lecture"],
@@ -72,7 +72,7 @@ function SidebarContent({ showLabels, onNav }) {
 
   const CONTENT = {
     dashboard:<AdminDashboard/>, biens:<AdminBiens/>, clients:<AdminClients/>,
-    // loyers:<AdminLoyers/>, ventes:<AdminVentes/>, demandes:<AdminDemandes/>,
+    loyers:<AdminLoyers/>, ventes:<AdminVentes/>, demandes:<AdminDemandes/>,
     contrats:<AdminContrats/>, visites:<AdminVisites/>, blog:<AdminBlog/>,
     temoignages:<AdminTemoignages/>, realisations:<AdminRealisations/>,
     utilisateurs:<AdminUsers/>, monprofil:<AdminMonProfil/>, params:<AdminParams/>,
@@ -87,6 +87,7 @@ function AdminLayout(){
   const userReady = user !== null && user !== undefined;
 
   const [tab,     setTab]     = useState("dashboard");
+  const [showLogout, setShowLogout] = useState(false);
   const [mob,     setMob]     = useState(false);
   const [isMobile,setIsMobile]= useState(window.innerWidth < DESKTOP);
 
@@ -123,7 +124,7 @@ function AdminLayout(){
 
   const CONTENT = {
     dashboard:<AdminDashboard/>, biens:<AdminBiens/>, clients:<AdminClients/>,
-    // loyers:<AdminLoyers/>, ventes:<AdminVentes/>, demandes:<AdminDemandes/>,
+    loyers:<AdminLoyers/>, ventes:<AdminVentes/>, demandes:<AdminDemandes/>,
     contrats:<AdminContrats/>, visites:<AdminVisites/>, blog:<AdminBlog/>,
     temoignages:<AdminTemoignages/>, realisations:<AdminRealisations/>,
     utilisateurs:<AdminUsers/>, monprofil:<AdminMonProfil/>, params:<AdminParams/>,
@@ -224,7 +225,7 @@ function AdminLayout(){
           </div>
         )}
         {!collapsed && (
-          <button onClick={logout} title="Déconnexion"
+          <button onClick={()=>setShowLogout(true)} title="Déconnexion"
             style={{ background:"none", border:"none", cursor:"pointer", fontSize:"16px", flexShrink:0, padding:"2px" }}>
             🚪
           </button>
@@ -315,7 +316,7 @@ function AdminLayout(){
                 + Bien
               </button>
             )}
-            <button onClick={()=>{ if(window.confirm("Voulez-vous vraiment vous déconnecter ?")) logout(); }} title="Se déconnecter"
+            <button onClick={()=>setShowLogout(true)} title="Se déconnecter"
               style={{
                 padding:"7px 14px", borderRadius:"8px", border:"1px solid #fecaca",
                 background:"#fef2f2", color:"#dc2626", cursor:"pointer",
@@ -332,6 +333,40 @@ function AdminLayout(){
           {CONTENT[tab] || null}
         </div>
       </main>
+    </div>
+
+      {/* Modal déconnexion */}
+      {showLogout && (
+        <>
+          <div onClick={()=>setShowLogout(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1000}}/>
+          <div style={{
+            position:"fixed", top:"50%", left:"50%",
+            transform:"translate(-50%,-50%)",
+            background:"white", borderRadius:"20px",
+            padding:"32px", width:"320px",
+            zIndex:1001, textAlign:"center",
+            boxShadow:"0 24px 64px rgba(0,0,0,0.25)",
+          }}>
+            <div style={{fontSize:"48px",marginBottom:"12px"}}>🚪</div>
+            <h3 style={{fontFamily:"Playfair Display,serif",fontSize:"20px",fontWeight:700,marginBottom:"8px",color:"var(--text)"}}>
+              Déconnexion
+            </h3>
+            <p style={{fontSize:"14px",color:"var(--gray)",marginBottom:"24px",lineHeight:1.6}}>
+              Voulez-vous vraiment vous déconnecter de l'administration ?
+            </p>
+            <div style={{display:"flex",gap:"12px",justifyContent:"center"}}>
+              <button onClick={()=>setShowLogout(false)}
+                style={{padding:"10px 24px",border:"1px solid var(--border)",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:600,background:"white",fontFamily:"Plus Jakarta Sans,sans-serif",color:"var(--text)"}}>
+                Annuler
+              </button>
+              <button onClick={()=>{ setShowLogout(false); logout(); }}
+                style={{padding:"10px 24px",border:"none",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:700,background:"#dc2626",color:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+                Se déconnecter
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
