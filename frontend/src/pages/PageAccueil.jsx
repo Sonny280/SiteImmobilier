@@ -11,6 +11,13 @@ function PageAccueil({setPage}){
   const nav = p=>{ setPage(p); window.scrollTo({top:0,behavior:"smooth"}); };
   const vedettes = biens.filter(b=>b.featured&&b.statut!=="archive").slice(0,3);
   const dispo    = biens.filter(b=>b.statut==="disponible").length;
+  const [temoignages, setTemoignages] = useState([]);
+  useEffect(()=>{
+    fetch(`${API}/temoignages`)
+      .then(r=>r.json())
+      .then(d=>{ if(Array.isArray(d)) setTemoignages(d.slice(0,3)); })
+      .catch(()=>{});
+  },[]);
   return(
     <div>
       {/* HERO */}
@@ -152,7 +159,7 @@ function PageAccueil({setPage}){
             <h2 style={{fontSize:"36px",fontWeight:700,color:"var(--white)"}}>Ce que disent nos clients</h2>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:"20px",marginBottom:"40px"}}>
-            {DEMO.temoignages.slice(0,3).map((t,i)=>(
+            {temoignages.map((t,i)=>(
               <div key={t.id} data-anim="fadeUp" data-delay={i*150} className="testi-card" style={{background:"rgba(255,255,255,0.07)",borderLeft:"4px solid var(--gold)",borderRadius:"0 16px 16px 0",padding:"clamp(12px,3vw,24px)"}}>
                 <Stars n={t.note}/>
                 <p style={{fontSize:"14px",lineHeight:1.8,color:"rgba(255,255,255,0.82)",margin:"14px 0",fontStyle:"italic"}}>"{t.texte}"</p>
@@ -196,3 +203,5 @@ function PageAccueil({setPage}){
 // ── BIEN CARD ──────────────────────────────────────────────────
 
 export default PageAccueil;
+
+
