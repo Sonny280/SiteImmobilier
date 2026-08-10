@@ -19,7 +19,7 @@ const ADMIN_TABS = [
   { id:"biens",        l:"Biens",            icon:"🏠", section:"main" },
   { id:"clients",      l:"Clients",          icon:"👥", section:"main" },
   // Section financière
-  // { id:"loyers",       l:"Loyers",           icon:"💰", section:"finance" },
+   { id:"loyers",       l:"Loyers",           icon:"💰", section:"finance" },
   { id:"ventes",       l:"Ventes",           icon:"🤝", section:"finance" },
   { id:"contrats",     l:"Contrats",         icon:"📄", section:"finance" },
   // Section commercial
@@ -27,7 +27,7 @@ const ADMIN_TABS = [
   { id:"visites",      l:"Agenda visites",   icon:"📅", section:"commercial" },
   // Section vitrine
   // { id:"blog",         l:"Blog",             icon:"✏️",  section:"vitrine" },
-  // { id:"temoignages",  l:"Témoignages",      icon:"⭐",  section:"vitrine" },
+  { id:"temoignages",  l:"Témoignages",      icon:"⭐",  section:"vitrine" },
   { id:"realisations", l:"Réalisations",     icon:"🏆", section:"vitrine" },
   // Section compte
   { id:"utilisateurs", l:"Utilisateurs",     icon:"🔐", section:"compte" },
@@ -47,13 +47,13 @@ const TAB_ROLES = {
   dashboard:    ["superadmin","admin","commercial","comptable","lecture"],
   biens:        ["superadmin","admin","commercial","lecture"],
   clients:      ["superadmin","admin","commercial","lecture"],
-  // loyers:       ["superadmin","admin","comptable","lecture"],
+  loyers:       ["superadmin","admin","comptable","lecture"],
   ventes:       ["superadmin","admin","comptable","lecture"],
   demandes:     ["superadmin","admin","commercial","lecture"],
   contrats:     ["superadmin","admin","commercial","comptable","lecture"],
   visites:      ["superadmin","admin","commercial","lecture"],
   // blog:         ["superadmin","admin"],
-  // temoignages:  ["superadmin","admin"],
+   temoignages:  ["superadmin","admin"],
   realisations: ["superadmin","admin"],
   utilisateurs: ["superadmin"],
   monprofil:    ["superadmin","admin","commercial","comptable","lecture"],
@@ -72,7 +72,7 @@ function SidebarContent({ showLabels, onNav }) {
 
   const CONTENT = {
     dashboard:<AdminDashboard/>, biens:<AdminBiens/>, clients:<AdminClients/>,
-    // loyers:<AdminLoyers/>, ventes:<AdminVentes/>, demandes:<AdminDemandes/>,
+     loyers:<AdminLoyers/>, ventes:<AdminVentes/>, demandes:<AdminDemandes/>,
     contrats:<AdminContrats/>, visites:<AdminVisites/>, blog:<AdminBlog/>,
     temoignages:<AdminTemoignages/>, realisations:<AdminRealisations/>,
     utilisateurs:<AdminUsers/>, monprofil:<AdminMonProfil/>, params:<AdminParams/>,
@@ -123,7 +123,7 @@ function AdminLayout(){
 
   const CONTENT = {
     dashboard:<AdminDashboard/>, biens:<AdminBiens/>, clients:<AdminClients/>,
-    // loyers:<AdminLoyers/>, ventes:<AdminVentes/>, demandes:<AdminDemandes/>,
+    loyers:<AdminLoyers/>, ventes:<AdminVentes/>, demandes:<AdminDemandes/>,
     contrats:<AdminContrats/>, visites:<AdminVisites/>, blog:<AdminBlog/>,
     temoignages:<AdminTemoignages/>, realisations:<AdminRealisations/>,
     utilisateurs:<AdminUsers/>, monprofil:<AdminMonProfil/>, params:<AdminParams/>,
@@ -334,3 +334,4 @@ export function AdminCalculatrice({ biens, setPage }) {
   const { Calculatrice } = require("../Calculatrice.jsx");
   return <Calculatrice biens={biens} setPage={setPage}/>;
 }
+
