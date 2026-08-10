@@ -9,7 +9,7 @@ import AnimStat from "../components/AnimStat.jsx";
 function PageAccueil({setPage}){
   const {biens} = useCtx();
   const nav = p=>{ setPage(p); window.scrollTo({top:0,behavior:"smooth"}); };
-  const vedettes = biens.filter(b=>b.featured&&b.statut!=="archive").slice(0,3);
+  const vedettes = biens.filter(b=>b.featured&&b.statut==="disponible").slice(0,3);
   const dispo    = biens.filter(b=>b.statut==="disponible").length;
   const [temoignages, setTemoignages] = useState([]);
   useEffect(()=>{
@@ -143,7 +143,7 @@ function PageAccueil({setPage}){
             <button onClick={()=>nav("services")} className="btn btn-outline btn-sm">Voir tout le catalogue</button>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(310px,1fr))",gap:"24px"}}>
-            {biens.filter(b=>b.statut!=="archive").slice(0,6).map((b,i)=>(
+            {biens.filter(b=>b.statut==="disponible").slice(0,6).map((b,i)=>(
               <div key={b.id} data-anim="fadeUp" data-delay={i*100}>
                 <BienCard bien={b} onClick={()=>nav(`bien-${b.id}`)}/>
               </div>

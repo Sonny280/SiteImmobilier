@@ -1084,7 +1084,16 @@ export function AdminVentes() {
                     <div className="text-sm font-bold text-emerald-700">{fmt(p.montant)} FCFA</div>
                     <div className="text-xs text-gray-500">{p.type} · {p.date} · {(p.modePaiement||"").replace("_"," ")}{p.reference?` · Réf: ${p.reference}`:""}</div>
                   </div>
-                  <span className="text-emerald-600 font-bold">✓</span>
+                  <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                    <span className="text-emerald-600 font-bold">✓</span>
+                    <button onClick={()=>genererRecuVente({
+                      vente: detailV,
+                      paiement: p,
+                      bien: biens.find(b=>b.id===detailV.bienId),
+                    })} style={{padding:"3px 9px",background:"var(--blueL)",color:"var(--blue2)",border:"1px solid var(--blueL2)",borderRadius:"5px",cursor:"pointer",fontSize:"10px",fontWeight:700}}>
+                      🖨️ Reçu
+                    </button>
+                  </div>
                 </div>
               ))}</div>
             }
