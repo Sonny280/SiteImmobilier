@@ -113,16 +113,16 @@ function PageAccueil({setPage}){
             <h2 style={{fontSize:"clamp(24px,6vw,38px)",fontWeight:700}} className="title-ul-c">Une offre complète pour votre patrimoine</h2>
             <div className="divider-gold" style={{margin:"18px auto 0"}}/>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"24px",maxWidth:"900px",margin:"0 auto"}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:"24px",maxWidth:"860px",margin:"0 auto"}}>
             {[
               {icon:"L",titre:"Gestion Locative",desc:"Recherche de locataires, suivi des loyers, états des lieux, renouvellements.",slug:"gestion"},
-              {icon:"V",titre:"Vente Immobilière",desc:"Estimation gratuite, négociation, accompagnement jusqu'à l'acte notarié.",slug:"vente"},
+              {icon:"V",titre:"Vente Immobilière",desc:"Évaluation de votre bien, négociation, accompagnement jusqu'à l'acte notarié.",slug:"vente"},
               {icon:"M",titre:"Location Meublée",desc:"Appartements équipés pour expatriés, cadres en mission, familles en transit.",slug:"meuble"},
               {icon:"N",titre:"Location Non Meublée",desc:"Appartements et villas en location mensuelle longue durée.",slug:"location"},
               {icon:"T",titre:"Vente de Terrains",desc:"Terrains à Abidjan et à l'intérieur du pays. Vérification des titres fonciers.",slug:"terrain"},
             ].map((s,i)=>(
               <div key={s.slug} data-anim="scaleUp" data-delay={i*100} onClick={()=>nav(`services-${s.slug}`)} className="card"
-                style={{padding:"clamp(18px,4vw,32px)",cursor:"pointer",gridColumn: i===3?"2/3": i===4?"3/4":"auto"}}>
+                style={{padding:"clamp(18px,4vw,32px)",cursor:"pointer"}}>
                 <div style={{width:"52px",height:"52px",borderRadius:"12px",background:"var(--blueL)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:"20px"}}>
                   <span style={{fontFamily:"Playfair Display,serif",fontSize:"22px",fontWeight:700,color:"var(--blue2)"}}>{s.icon}</span>
                 </div>
@@ -173,24 +173,12 @@ function PageAccueil({setPage}){
         </div>
       </section>
 
-      {/* CALCULATRICE CTA */}
-      <section className="section-sm" style={{background:"var(--blueL)"}}>
-        <div className="container" style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"24px",flexWrap:"wrap"}}>
-          <div data-anim="fadeLeft">
-            <div className="pill">Outil gratuit</div>
-            <h2 style={{fontSize:"clamp(20px,4.5vw,28px)",fontWeight:700,marginBottom:"8px"}}>Calculatrice immobilière</h2>
-            <p style={{fontSize:"14px",color:"var(--gray)",maxWidth:"440px"}}>Budget locatif, simulation de crédit, rendement d'investissement — estimez vos projets immobiliers en quelques secondes.</p>
-          </div>
-          <div data-anim="fadeRight" style={{display:"flex",gap:"12px",flexShrink:0,flexWrap:"wrap"}}>
-            <button onClick={()=>nav("calculatrice")} className="btn btn-primary btn-lg">Calculer mon budget</button>
-          </div>
-        </div>
-      </section>
+      {/* Calculatrice masquée */}
       {/* CTA CONTACT */}
       <section className="section-sm" style={{background:"var(--white)"}}>
         <div data-anim="fadeUp" className="container" style={{textAlign:"center"}}>
           <h2 style={{fontSize:"clamp(22px,5vw,34px)",fontWeight:700,marginBottom:"16px"}}>Votre projet immobilier commence ici</h2>
-          <p style={{fontSize:"16px",color:"var(--gray)",marginBottom:"36px",maxWidth:"520px",margin:"0 auto 36px"}}>Estimation gratuite, conseil personnalisé — notre équipe répond sous 24h.</p>
+          <p style={{fontSize:"16px",color:"var(--gray)",marginBottom:"36px",maxWidth:"520px",margin:"0 auto 36px"}}>Conseil personnalisé — notre équipe répond sous 24h.</p>
           <div data-anim="scaleUp" data-delay="200" style={{display:"flex",gap:"14px",justifyContent:"center",flexWrap:"wrap"}}>
             <button onClick={()=>nav("contact")} className="btn btn-primary btn-lg">Nous contacter</button>
             <a href={`${wa(AG.waRaw)}`} target="_blank" rel="noopener noreferrer" className="btn btn-wa btn-lg">WhatsApp direct</a>
