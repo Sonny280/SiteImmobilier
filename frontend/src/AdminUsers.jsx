@@ -4,6 +4,12 @@ import { useCtx } from "./context.jsx";
 import { API } from "./utils.js";
 import { Modal, Inp, Sel } from "./ui.jsx";
 
+function getAuthHeader() {
+  const tok = sessionStorage.getItem("_ici_tok");
+  return tok ? { Authorization: `Bearer ${tok}` } : {};
+}
+
+
 const ROLES = [
   { v:"superadmin", l:"Super-administrateur", desc:"Accès complet + gestion des utilisateurs" },
   { v:"admin",      l:"Administrateur",        desc:"Accès complet à tous les modules" },
@@ -65,7 +71,7 @@ export function AdminMonProfil() {
     try {
       const r = await fetch(`${API}/users/me/password`, {
         method: "PUT",
-        headers:{"Content-Type":"application/json"}, credentials:"include",
+        headers:{"Content-Type":"application/json", ...getAuthHeader()},
         body: JSON.stringify({ ancien, nouveau }),
       });
       const d = await r.json();
@@ -138,7 +144,7 @@ export function AdminUsers() {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await fetch(`${API}/users`, { credentials:"include" });
+      const r = await fetch(`${API}/users`, { headers: getAuthHeader() });
       if (!r.ok) { setLoading(false); return; }
       const data = await r.json();
       setUsers(Array.isArray(data) ? data : []);
@@ -164,7 +170,7 @@ export function AdminUsers() {
       const body = isNew ? form : { nom: form.nom, email: form.email, role: form.role };
       const res = await fetch(isNew?`${API}/users`:`${API}/users/${modal.id}`, {
         method: isNew?"POST":"PUT",
-        headers:{"Content-Type":"application/json"}, credentials:"include",
+        headers:{"Content-Type":"application/json", ...getAuthHeader()},
         body: JSON.stringify(body),
       });
       const saved = await res.json();
@@ -184,7 +190,7 @@ export function AdminUsers() {
     try {
       const res = await fetch(`${API}/users/${pwdModal.id}/password`, {
         method: "PUT",
-        headers:{"Content-Type":"application/json"}, credentials:"include",
+        headers:{"Content-Type":"application/json", ...getAuthHeader()},
         body: JSON.stringify({ password: newPwd }),
       });
       const d = await res.json();
@@ -197,7 +203,7 @@ export function AdminUsers() {
 
   const del = async (u) => {
     if(!confirm(`Supprimer définitivement le compte de ${u.nom} ?\nCette action est irréversible.`)) return;
-    const r = await fetch(`${API}/users/${u.id}`,{method:"DELETE",credentials:"include"});
+    const r = await fetch(`${API}/users/${u.id}`,{method:"DELETE", headers: getAuthHeader()});
     const d = await r.json().catch(()=>({}));
     if(!r.ok){ showToast(d.error || "Erreur", "warn"); return; }
     setUsers(p=>p.filter(x=>x.id!==u.id));
@@ -339,3 +345,4 @@ export function AdminUsers() {
     </div>
   );
 }
+
