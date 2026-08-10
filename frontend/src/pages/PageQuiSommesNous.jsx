@@ -1,14 +1,117 @@
-import { useState, useEffect } from "react";
-import { useCtx } from "../context.jsx";
-import { fmt, fmtM, wa, photoSrc, TL, SC, SL, AG, DEMO, API } from "../utils.js";
+import { useState } from "react";
+import { AG } from "../utils.js";
 import { useSeo } from "../seo.js";
-import { Inp, Sel, Txta, Gallery, Stars } from "../ui.jsx";
-import BienCard from "../components/BienCard.jsx";
-import AnimStat from "../components/AnimStat.jsx";
 import PageHero from "../components/PageHero.jsx";
+
+// Helpers localStorage pour les photos d'équipe
+function getTeamPhotos() {
+  try { return JSON.parse(localStorage.getItem("team_photos") || "{}"); } catch { return {}; }
+}
+function saveTeamPhoto(key, dataUrl) {
+  const p = getTeamPhotos(); p[key] = dataUrl;
+  localStorage.setItem("team_photos", JSON.stringify(p));
+}
+function removeTeamPhoto(key) {
+  const p = getTeamPhotos(); delete p[key];
+  localStorage.setItem("team_photos", JSON.stringify(p));
+}
+
+// Membres de l'équipe — modifiez ici les noms et postes
+const EQUIPE = [
+  { key:"dg",     nom:"Kouassi Atse Charles", poste:"Directeur Général",         initiales:"KA" },
+  { key:"comm",   nom:"À compléter",          poste:"Responsable Commercial",     initiales:"RC" },
+  { key:"gestion",nom:"À compléter",          poste:"Gestionnaire Locatif",       initiales:"GL" },
+  { key:"compta", nom:"À compléter",          poste:"Comptable",                  initiales:"CP" },
+];
+
+// Composant carte membre avec upload photo
+function MembreCard({ membre, photos, onPhotoChange }) {
+  const photo = photos[membre.key];
+
+  const handleUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) { alert("Photo trop lourde (max 3 Mo)"); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      saveTeamPhoto(membre.key, ev.target.result);
+      onPhotoChange();
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleRemove = () => {
+    removeTeamPhoto(membre.key);
+    onPhotoChange();
+  };
+
+  return (
+    <div data-anim="fadeUp" style={{
+      background:"white", borderRadius:"20px", overflow:"hidden",
+      border:"1px solid var(--border)", textAlign:"center",
+      boxShadow:"0 4px 24px rgba(0,0,0,0.06)", transition:"transform 0.2s",
+    }}
+      onMouseEnter={e=>e.currentTarget.style.transform="translateY(-4px)"}
+      onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}
+    >
+      {/* Photo */}
+      <div style={{ position:"relative", background:"var(--blueL)", height:"200px" }}>
+        {photo ? (
+          <img src={photo} alt={membre.nom}
+            style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"top" }}/>
+        ) : (
+          <div style={{
+            width:"100%", height:"100%", display:"flex", alignItems:"center",
+            justifyContent:"center", flexDirection:"column", gap:"8px",
+          }}>
+            <div style={{
+              width:"80px", height:"80px", borderRadius:"50%",
+              background:"var(--blue)", display:"flex", alignItems:"center",
+              justifyContent:"center", fontFamily:"Playfair Display,serif",
+              fontSize:"24px", fontWeight:700, color:"white",
+            }}>{membre.initiales}</div>
+          </div>
+        )}
+        {/* Bouton upload superposé */}
+        <label style={{
+          position:"absolute", bottom:"8px", right:"8px",
+          background:"rgba(0,0,0,0.55)", color:"white", borderRadius:"6px",
+          padding:"4px 10px", fontSize:"11px", fontWeight:700,
+          cursor:"pointer", backdropFilter:"blur(4px)",
+        }}>
+          📷 {photo ? "Changer" : "Ajouter"}
+          <input type="file" accept="image/*" onChange={handleUpload} style={{display:"none"}}/>
+        </label>
+        {photo && (
+          <button onClick={handleRemove} style={{
+            position:"absolute", top:"8px", right:"8px",
+            background:"rgba(220,38,38,0.8)", color:"white", border:"none",
+            borderRadius:"6px", padding:"4px 8px", fontSize:"11px",
+            cursor:"pointer",
+          }}>✕</button>
+        )}
+      </div>
+
+      {/* Infos */}
+      <div style={{ padding:"20px" }}>
+        <h3 style={{ fontFamily:"Playfair Display,serif", fontSize:"17px", fontWeight:700, marginBottom:"5px", color:"var(--text)" }}>
+          {membre.nom}
+        </h3>
+        <p style={{
+          fontSize:"11px", fontWeight:700, letterSpacing:"0.1em",
+          textTransform:"uppercase", color:"var(--gold)",
+        }}>{membre.poste}</p>
+      </div>
+    </div>
+  );
+}
 
 function PageQuiSommesNous(){
   useSeo("qui-sommes-nous");
+  const [photos, setPhotos] = useState(getTeamPhotos());
+  const refresh = () => setPhotos({...getTeamPhotos()});
+
   return(
     <div>
       <PageHero
@@ -19,6 +122,7 @@ function PageQuiSommesNous(){
         height="360px"
       />
 
+      {/* Mission */}
       <section className="section" style={{background:"var(--white)"}}>
         <div className="container">
           <div className="r-grid-2">
@@ -39,7 +143,22 @@ function PageQuiSommesNous(){
             </div>
             <div data-anim="fadeRight">
               <div style={{background:"var(--blue)",borderRadius:"20px",padding:"clamp(24px,5vw,48px)",color:"white",textAlign:"center",marginBottom:"20px"}}>
-                <div style={{width:"80px",height:"80px",borderRadius:"50%",background:"var(--gold)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 24px",fontFamily:"Playfair Display,serif",fontSize:"clamp(18px,4vw,28px)",fontWeight:700,color:"var(--blue)"}}>ES</div>
+                {/* Photo DG */}
+                <div style={{position:"relative",width:"100px",height:"100px",margin:"0 auto 20px"}}>
+                  {photos["dg"] ? (
+                    <img src={photos["dg"]} alt="DG"
+                      style={{width:"100px",height:"100px",borderRadius:"50%",objectFit:"cover",objectPosition:"top",border:"3px solid var(--gold)"}}/>
+                  ) : (
+                    <div style={{width:"100px",height:"100px",borderRadius:"50%",background:"var(--gold)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Playfair Display,serif",fontSize:"28px",fontWeight:700,color:"var(--blue)"}}>KA</div>
+                  )}
+                  <label style={{position:"absolute",bottom:0,right:0,background:"rgba(0,0,0,0.6)",borderRadius:"50%",width:"28px",height:"28px",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"13px"}} title="Changer la photo">
+                    📷
+                    <input type="file" accept="image/*" onChange={e=>{
+                      const f=e.target.files?.[0]; if(!f) return;
+                      const r=new FileReader(); r.onload=ev=>{saveTeamPhoto("dg",ev.target.result);refresh();}; r.readAsDataURL(f); e.target.value="";
+                    }} style={{display:"none"}}/>
+                  </label>
+                </div>
                 <h3 style={{fontFamily:"Playfair Display,serif",fontSize:"22px",fontWeight:700,marginBottom:"6px"}}>Kouassi Atse Charles</h3>
                 <p style={{fontSize:"12px",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.6)",marginBottom:"20px"}}>Directeur Général</p>
                 <blockquote style={{fontSize:"15px",fontStyle:"italic",lineHeight:1.8,color:"rgba(255,255,255,0.82)",borderLeft:"3px solid var(--gold)",paddingLeft:"18px",textAlign:"left"}}>« {AG.slogan} »</blockquote>
@@ -57,8 +176,25 @@ function PageQuiSommesNous(){
         </div>
       </section>
 
-      {/* Valeurs */}
+      {/* Équipe */}
       <section className="section" style={{background:"var(--off)"}}>
+        <div className="container">
+          <div style={{textAlign:"center",marginBottom:"48px"}}>
+            <div className="pill">Notre équipe</div>
+            <h2 style={{fontSize:"clamp(22px,5vw,34px)",fontWeight:700}} className="title-ul-c">Des professionnels à votre service</h2>
+            <div className="divider-gold" style={{margin:"18px auto 0"}}/>
+            <p style={{fontSize:"14px",color:"var(--gray)",marginTop:"12px"}}>Cliquez sur 📷 pour ajouter les photos de votre équipe</p>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:"24px"}}>
+            {EQUIPE.map(m => (
+              <MembreCard key={m.key} membre={m} photos={photos} onPhotoChange={refresh}/>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Valeurs */}
+      <section className="section" style={{background:"var(--white)"}}>
         <div className="container">
           <div style={{textAlign:"center",marginBottom:"48px"}}>
             <div className="pill">Nos valeurs</div>
@@ -84,8 +220,8 @@ function PageQuiSommesNous(){
         </div>
       </section>
 
-      {/* Agrément + documents */}
-      <section className="section-sm" style={{background:"var(--white)"}}>
+      {/* Documents */}
+      <section className="section-sm" style={{background:"var(--off)"}}>
         <div className="container" style={{maxWidth:"700px",textAlign:"center"}}>
           <div className="pill">Documents officiels</div>
           <h2 style={{fontSize:"clamp(20px,4.5vw,30px)",fontWeight:700,marginBottom:"16px"}}>Télécharger nos documents</h2>
@@ -104,6 +240,5 @@ function PageQuiSommesNous(){
   );
 }
 
-// ── PAGE SERVICES ──────────────────────────────────────────────
-
 export default PageQuiSommesNous;
+
