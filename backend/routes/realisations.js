@@ -3,45 +3,67 @@ const express = require("express");
 const router  = express.Router();
 const { prepare } = require("../config/database");
 const { auth, requireRole } = require("../middleware/auth");
+const { uploadBase64 } = require("../config/upload");
 
-// GET publiques
+// GET public
 router.get("/", async (req, res) => {
-  const { type } = req.query;
-  let sql = "SELECT * FROM realisations WHERE visible=1";
-  const p = [];
-  if (type) { sql += " AND type=?"; p.push(type); }
-  sql += " ORDER BY ordre ASC, annee DESC, id DESC";
-  res.json(await prepare(sql).all(...p));
+  try {
+    const rows = await prepare("SELECT * FROM realisations WHERE visible=1 ORDER BY ordre ASC, createdAt DESC").all();
+    res.json(rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET admin (toutes)
+// GET admin
 router.get("/admin", auth, requireRole(["superadmin","admin"]), async (req, res) => {
-  res.json(await prepare("SELECT * FROM realisations ORDER BY ordre ASC, id DESC").all());
+  try {
+    const rows = await prepare("SELECT * FROM realisations ORDER BY ordre ASC, createdAt DESC").all();
+    res.json(rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST admin — créer
+// POST upload image — vers Cloudinary
+router.post("/upload-image", auth, requireRole(["superadmin","admin"]), async (req, res) => {
+  try {
+    const { image, type, nom } = req.body;
+    if (!image) return res.status(400).json({ error: "Image requise" });
+    const ext = (type||"image/jpeg").split("/")[1] || "jpg";
+    const filename = `realisation-${Date.now()}.${ext}`;
+    const { url } = await uploadBase64(image, filename);
+    res.json({ url });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST créer
 router.post("/", auth, requireRole(["superadmin","admin"]), async (req, res) => {
-  const { titre, type, description, annee, commune, ville, image, ordre } = req.body;
-  if (!titre) return res.status(400).json({ error: "Titre requis" });
-  const r = await prepare("INSERT INTO realisations (titre,type,description,annee,commune,ville,image,ordre) VALUES (?,?,?,?,?,?,?,?)")
-    .run(titre, type || "Gestion locative", description || null, annee || String(new Date().getFullYear()), commune || null, ville || "Abidjan", image || null, ordre || 0);
-  res.status(201).json(await prepare("SELECT * FROM realisations WHERE id=?").get(r.lastInsertRowid));
+  try {
+    const { titre, type, description, annee, commune, ville, image, ordre, visible } = req.body;
+    if (!titre) return res.status(400).json({ error: "Titre requis" });
+    const r = await prepare("INSERT INTO realisations(titre,type,description,annee,commune,ville,image,ordre,visible) VALUES(?,?,?,?,?,?,?,?,?)").run(
+      titre, type||"Gestion locative", description||"", annee||"", commune||"", ville||"Abidjan", image||"", +ordre||0, visible!==undefined?+visible:1
+    );
+    res.status(201).json(await prepare("SELECT * FROM realisations WHERE id=?").get(r.lastInsertRowid));
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// PUT admin — modifier
+// PUT modifier
 router.put("/:id", auth, requireRole(["superadmin","admin"]), async (req, res) => {
-  const { titre, type, description, annee, commune, ville, image, ordre, visible } = req.body;
-  const r = await prepare("SELECT * FROM realisations WHERE id=?").get(+req.params.id);
-  if (!r) return res.status(404).json({ error: "Introuvable" });
-  await prepare("UPDATE realisations SET titre=?,type=?,description=?,annee=?,commune=?,ville=?,image=?,ordre=?,visible=? WHERE id=?")
-    .run(titre||r.titre, type||r.type, description??r.description, annee||r.annee, commune??r.commune, ville||r.ville, image??r.image, ordre??r.ordre, visible??r.visible, r.id);
-  res.json(await prepare("SELECT * FROM realisations WHERE id=?").get(r.id));
+  try {
+    const id = +req.params.id;
+    const { titre, type, description, annee, commune, ville, image, ordre, visible } = req.body;
+    await prepare("UPDATE realisations SET titre=?,type=?,description=?,annee=?,commune=?,ville=?,image=?,ordre=?,visible=? WHERE id=?").run(
+      titre, type||"Gestion locative", description||"", annee||"", commune||"", ville||"Abidjan", image||"", +ordre||0, visible!==undefined?+visible:1, id
+    );
+    res.json(await prepare("SELECT * FROM realisations WHERE id=?").get(id));
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE admin
+// DELETE
 router.delete("/:id", auth, requireRole(["superadmin","admin"]), async (req, res) => {
-  await prepare("DELETE FROM realisations WHERE id=?").run(+req.params.id);
-  res.json({ success: true });
+  try {
+    await prepare("DELETE FROM realisations WHERE id=?").run(+req.params.id);
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;
+
