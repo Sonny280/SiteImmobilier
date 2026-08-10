@@ -235,6 +235,7 @@ function AdminLayout(){
   );
 
   return (
+    <>
     <div style={{ display:"flex", minHeight:"100vh", background:"var(--off)" }}>
 
       {/* ── Sidebar desktop (jamais affichée sur mobile) ── */}
@@ -335,39 +336,38 @@ function AdminLayout(){
       </main>
     </div>
 
-      {/* Modal déconnexion */}
-      {showLogout && (
-        <>
-          <div onClick={()=>setShowLogout(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1000}}/>
-          <div style={{
-            position:"fixed", top:"50%", left:"50%",
-            transform:"translate(-50%,-50%)",
-            background:"white", borderRadius:"20px",
-            padding:"32px", width:"320px",
-            zIndex:1001, textAlign:"center",
-            boxShadow:"0 24px 64px rgba(0,0,0,0.25)",
-          }}>
-            <div style={{fontSize:"48px",marginBottom:"12px"}}>🚪</div>
-            <h3 style={{fontFamily:"Playfair Display,serif",fontSize:"20px",fontWeight:700,marginBottom:"8px",color:"var(--text)"}}>
-              Déconnexion
-            </h3>
-            <p style={{fontSize:"14px",color:"var(--gray)",marginBottom:"24px",lineHeight:1.6}}>
-              Voulez-vous vraiment vous déconnecter de l'administration ?
-            </p>
-            <div style={{display:"flex",gap:"12px",justifyContent:"center"}}>
-              <button onClick={()=>setShowLogout(false)}
-                style={{padding:"10px 24px",border:"1px solid var(--border)",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:600,background:"white",fontFamily:"Plus Jakarta Sans,sans-serif",color:"var(--text)"}}>
-                Annuler
-              </button>
-              <button onClick={()=>{ setShowLogout(false); logout(); }}
-                style={{padding:"10px 24px",border:"none",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:700,background:"#dc2626",color:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
-                Se déconnecter
-              </button>
-            </div>
+    {/* Modal déconnexion — en dehors du div flex pour éviter le clipping */}
+    {showLogout && (
+      <div style={{position:"fixed",inset:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div onClick={()=>setShowLogout(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.45)"}}/>
+        <div style={{
+          position:"relative",
+          background:"white", borderRadius:"20px",
+          padding:"32px", width:"320px",
+          textAlign:"center",
+          boxShadow:"0 24px 64px rgba(0,0,0,0.25)",
+        }}>
+          <div style={{fontSize:"48px",marginBottom:"12px"}}>🚪</div>
+          <h3 style={{fontFamily:"Playfair Display,serif",fontSize:"20px",fontWeight:700,marginBottom:"8px",color:"var(--text)"}}>
+            Déconnexion
+          </h3>
+          <p style={{fontSize:"14px",color:"var(--gray)",marginBottom:"24px",lineHeight:1.6}}>
+            Voulez-vous vraiment vous déconnecter de l'administration ?
+          </p>
+          <div style={{display:"flex",gap:"12px",justifyContent:"center"}}>
+            <button onClick={()=>setShowLogout(false)}
+              style={{padding:"10px 24px",border:"1px solid var(--border)",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:600,background:"white",fontFamily:"Plus Jakarta Sans,sans-serif",color:"var(--text)"}}>
+              Annuler
+            </button>
+            <button onClick={()=>{ setShowLogout(false); logout(); }}
+              style={{padding:"10px 24px",border:"none",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:700,background:"#dc2626",color:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+              Se déconnecter
+            </button>
           </div>
-        </>
-      )}
-    </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
