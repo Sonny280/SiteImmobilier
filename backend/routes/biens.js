@@ -1,11 +1,11 @@
-// routes/biens.js
+// routes/biens.js — avec Cloudinary pour les photos
 const express  = require("express");
 const router   = express.Router();
 const path     = require("path");
 const fs       = require("fs");
 const { prepare } = require("../config/database");
 const { auth, requireModule } = require("../middleware/auth");
-const { upload, photoUrl, UPLOAD_DIR } = require("../config/upload");
+const { upload, photoUrl, deleteFile, uploadBase64, uploadFile, UPLOAD_DIR } = require("../config/upload");
 
 function slug(titre, id) {
   return titre.toLowerCase().normalize("NFD")
@@ -14,17 +14,15 @@ function slug(titre, id) {
     .replace(/\s+/g,"-").trim() + `-${id}`;
 }
 
-// Ajoute les photos à un bien — async car prepare().all() est une Promise en prod
 async function withPhotos(b) {
   if (!b) return null;
   const photos = await prepare(
     "SELECT * FROM photos WHERE bienId=? ORDER BY principale DESC, position ASC"
   ).all(b.id);
-  const photosWithUrl = photos.map(p => ({...p, url: photoUrl(p.filename) || p.url}));
+  const photosWithUrl = photos.map(p => ({...p, url: p.url || photoUrl(p.filename)}));
   return {...b, photos: photosWithUrl, photo_principale: photosWithUrl[0] || null};
 }
 
-// MIME whitelist pour uploads base64
 const MIME_TO_EXT = {
   "image/jpeg": "jpg", "image/jpg": "jpg",
   "image/png": "png", "image/webp": "webp", "image/gif": "gif",
@@ -46,7 +44,6 @@ router.get("/", async (req, res) => {
     if (search)   { sql += " AND (titre LIKE ? OR quartier LIKE ? OR commune LIKE ? OR description LIKE ?)"; p.push(...Array(4).fill(`%${search}%`)); }
     sql += " ORDER BY featured DESC, createdAt DESC LIMIT ? OFFSET ?";
     p.push(+limit, +offset);
-
     const rawBiens = await prepare(sql).all(...p);
     const biens = await Promise.all(rawBiens.map(withPhotos));
     const totRow = await prepare("SELECT COUNT(*) as c FROM biens WHERE statut!='archive'").get();
@@ -107,13 +104,7 @@ router.put("/:id", auth, requireModule("biens"), async (req, res) => {
     const id = +req.params.id;
     const curr = await prepare("SELECT * FROM biens WHERE id=?").get(id);
     if (!curr) return res.status(404).json({ error: "Bien introuvable" });
-    let {titre,type,prix,surface,chambres,sdb,etage,parking,quartier,commune,ville,adresse,statut,description,equipements,whatsapp,telephone,featured,meta_title,meta_desc} = req.body;
-    if ((statut==="loue"||statut==="vendu") && curr.statut!==statut) {
-      const hasClient = await prepare("SELECT COUNT(*) as n FROM clients WHERE bienId=? AND type='locataire'").get(id);
-      const hasVente  = await prepare("SELECT COUNT(*) as n FROM ventes WHERE bienId=? AND statut!='annulee'").get(id);
-      if (statut==="loue"  && !(hasClient?.n > 0)) return res.status(400).json({ error: "Impossible : aucun locataire associé." });
-      if (statut==="vendu" && !(hasVente?.n  > 0)) return res.status(400).json({ error: "Impossible : aucune vente finalisée." });
-    }
+    const {titre,type,prix,surface,chambres,sdb,etage,parking,quartier,commune,ville,adresse,statut,description,equipements,whatsapp,telephone,featured,meta_title,meta_desc} = req.body;
     await prepare("UPDATE biens SET titre=?,type=?,prix=?,surface=?,chambres=?,sdb=?,etage=?,parking=?,quartier=?,commune=?,ville=?,adresse=?,statut=?,description=?,equipements=?,whatsapp=?,telephone=?,featured=?,slug=?,meta_title=?,meta_desc=?,updatedAt=CURRENT_TIMESTAMP WHERE id=?").run(
       titre,type,+prix,surface||null,+chambres||0,+sdb||0,etage||null,+parking||0,
       quartier||"",commune||"",ville||"Abidjan",adresse||"",statut||"disponible",
@@ -131,16 +122,14 @@ router.delete("/:id", auth, requireModule("biens"), async (req, res) => {
     const b = await prepare("SELECT * FROM biens WHERE id=?").get(id);
     if (!b) return res.status(404).json({ error: "Introuvable" });
     const photos = await prepare("SELECT * FROM photos WHERE bienId=?").all(id);
-    for (const p of photos) {
-      if (p.filename) { const fp = path.join(UPLOAD_DIR, p.filename); if (fs.existsSync(fp)) fs.unlinkSync(fp); }
-    }
+    for (const p of photos) { await deleteFile(p.filename || p.url); }
     await prepare("DELETE FROM photos WHERE bienId=?").run(id);
     await prepare("DELETE FROM biens WHERE id=?").run(id);
     res.json({ success: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/biens/:id/photos (multipart)
+// POST /api/biens/:id/photos (multipart) — upload via Cloudinary
 router.post("/:id/photos", auth, requireModule("biens"), upload.array("photos", 10), async (req, res) => {
   try {
     const bienId = +req.params.id;
@@ -150,16 +139,16 @@ router.post("/:id/photos", auth, requireModule("biens"), upload.array("photos", 
     const inserted = [];
     for (let i = 0; i < req.files.length; i++) {
       const file = req.files[i];
-      const url = photoUrl(file.filename);
+      const { url, filename } = await uploadFile(file.path, file.originalname);
       const principale = (existing + i) === 0 ? 1 : 0;
-      const r = await prepare("INSERT INTO photos(bienId,url,filename,position,principale) VALUES(?,?,?,?,?)").run(bienId, url, file.filename, existing + i, principale);
-      inserted.push({ id: r.lastInsertRowid, url, filename: file.filename, principale });
+      const r = await prepare("INSERT INTO photos(bienId,url,filename,position,principale) VALUES(?,?,?,?,?)").run(bienId, url, filename, existing + i, principale);
+      inserted.push({ id: r.lastInsertRowid, url, filename, principale });
     }
     res.status(201).json({ success: true, photos: inserted });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/biens/:id/photos/base64
+// POST /api/biens/:id/photos/base64 — upload base64 via Cloudinary
 router.post("/:id/photos/base64", auth, requireModule("biens"), async (req, res) => {
   try {
     const bienId = +req.params.id;
@@ -178,11 +167,10 @@ router.post("/:id/photos/base64", auth, requireModule("biens"), async (req, res)
       const data = img.data.slice(match[0].length);
       if (Buffer.byteLength(data, "base64") > 8 * 1024 * 1024) continue;
       const filename = `${Date.now()}-${Math.floor(Math.random()*99999)}.${ext}`;
-      fs.writeFileSync(path.join(UPLOAD_DIR, filename), Buffer.from(data, "base64"));
-      const url = photoUrl(filename);
+      const { url, filename: savedFilename } = await uploadBase64(data, filename);
       const principale = (existing + i) === 0 ? 1 : 0;
-      const r = await prepare("INSERT INTO photos(bienId,url,filename,position,principale) VALUES(?,?,?,?,?)").run(bienId, url, filename, existing + i, principale);
-      inserted.push({ id: r.lastInsertRowid, url, filename, principale });
+      const r = await prepare("INSERT INTO photos(bienId,url,filename,position,principale) VALUES(?,?,?,?,?)").run(bienId, url, savedFilename, existing + i, principale);
+      inserted.push({ id: r.lastInsertRowid, url, filename: savedFilename, principale });
     }
     if (!inserted.length) return res.status(400).json({ error: "Aucune image valide." });
     res.status(201).json({ success: true, photos: inserted });
@@ -194,7 +182,7 @@ router.delete("/:id/photos/:photoId", auth, requireModule("biens"), async (req, 
   try {
     const p = await prepare("SELECT * FROM photos WHERE id=?").get(+req.params.photoId);
     if (!p) return res.status(404).json({ error: "Photo introuvable" });
-    if (p.filename) { const fp = path.join(UPLOAD_DIR, p.filename); if (fs.existsSync(fp)) fs.unlinkSync(fp); }
+    await deleteFile(p.filename || p.url);
     await prepare("DELETE FROM photos WHERE id=?").run(+req.params.photoId);
     res.json({ success: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
