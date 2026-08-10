@@ -86,6 +86,7 @@ app.use("/api/documents",    require("./routes/documents"));
 // Le sitemap est servi à la racine (/sitemap.xml), pas sous /api — c'est
 // l'emplacement standard que les moteurs de recherche s'attendent à trouver.
 app.use("/", require("./routes/sitemap"));
+app.use("/api/settings", require("./routes/settings"));
 app.get("/api/health",(_,res)=>res.json({status:"ok",version:"3.0.0",timestamp:new Date().toISOString()}));
 
 app.use((err,req,res,_)=>{
@@ -101,3 +102,4 @@ initDb().then(()=>{
     else console.log(`⚠️  NODE_ENV n'est pas "production" — HTTPS non forcé. Mettez NODE_ENV=production sur votre hébergement.`);
   });
 }).catch(e=>{console.error("❌",e.message);process.exit(1);});
+

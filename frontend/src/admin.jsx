@@ -4,6 +4,7 @@ import { useCtx } from "./context.jsx";
 import { Badge, Inp, Sel, Txta, Modal, KpiCard, Gallery, PhotoUpload } from "./ui.jsx";
 import { fmt, fmtM, wa, photoSrc, TL, SL, SC, ETAPES_VENTE, API, AG } from "./utils.js";
 import { genererQuittanceLoyer, genererRecuVente } from "./components/Recu.jsx";
+import { useSettings } from "./hooks/useSettings.js";
 import { DocumentsPanel } from "./components/Documents.jsx";
 
 // Btn mini inline pour admin
@@ -1562,50 +1563,50 @@ export function AdminVisites() {
 // ── PARAMÈTRES ────────────────────────────────────────────────
 export function AdminParams() {
   const {online} = useCtx();
-  const [logo, setLogo] = useState(localStorage.getItem("ag_logo")||"");
-  const [saving, setSaving] = useState(false);
+  const { settings, loading: loadingSettings, uploadSetting, deleteSetting } = useSettings();
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState("");
 
-  const handleLogoUpload = (e) => {
+  const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2*1024*1024) { alert("Logo trop lourd (max 2 Mo)"); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const url = ev.target.result;
-      setLogo(url);
-      localStorage.setItem("ag_logo", url);
-      alert("Logo enregistré — il apparaîtra sur tous vos reçus.");
-    };
-    reader.readAsDataURL(file);
+    setUploading(true); setErr("");
+    try {
+      await uploadSetting("logo", file);
+      alert("Logo enregistré sur Cloudinary — il apparaîtra sur tous vos reçus.");
+    } catch(e) { setErr(e.message); }
+    finally { setUploading(false); e.target.value = ""; }
   };
 
-  const removeLogo = () => {
-    setLogo("");
-    localStorage.removeItem("ag_logo");
+  const removeLogo = async () => {
+    await deleteSetting("logo");
   };
+
+  const logo = settings.logo || "";
 
   return <div className="max-w-2xl space-y-5">
     {/* Logo agence */}
     <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
       <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4">Logo de l'agence</h3>
-      <p className="text-xs text-gray-500 mb-4">Ce logo apparaîtra sur tous vos reçus et documents imprimés. Format recommandé : PNG transparent, max 2 Mo.</p>
+      <p className="text-xs text-gray-500 mb-4">Stocké sur Cloudinary — permanent, visible sur tous vos reçus. Max 3 Mo.</p>
+      {err && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"8px",padding:"8px 12px",fontSize:"12px",color:"#dc2626",marginBottom:"12px"}}>{err}</div>}
       {logo ? (
         <div style={{display:"flex",alignItems:"center",gap:"16px",marginBottom:"12px"}}>
           <img src={logo} alt="Logo" style={{height:"60px",maxWidth:"200px",objectFit:"contain",border:"1px solid var(--border)",borderRadius:"8px",padding:"8px",background:"white"}}/>
           <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-            <label style={{padding:"8px 16px",background:"var(--blue)",color:"white",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>
-              Changer le logo
-              <input type="file" accept="image/*" onChange={handleLogoUpload} style={{display:"none"}}/>
+            <label style={{padding:"8px 16px",background:"var(--blue)",color:"white",borderRadius:"8px",cursor:uploading?"not-allowed":"pointer",fontSize:"12px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif",opacity:uploading?0.6:1}}>
+              {uploading ? "Upload..." : "Changer le logo"}
+              <input type="file" accept="image/*" onChange={handleLogoUpload} style={{display:"none"}} disabled={uploading}/>
             </label>
             <button onClick={removeLogo} style={{padding:"8px 16px",border:"1px solid #fecaca",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:700,color:"#dc2626",background:"#fef2f2",fontFamily:"Plus Jakarta Sans,sans-serif"}}>Supprimer</button>
           </div>
         </div>
       ) : (
-        <label style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"8px",padding:"24px",border:"2px dashed var(--border)",borderRadius:"10px",cursor:"pointer",background:"var(--off)"}}>
-          <span style={{fontSize:"32px"}}>🖼️</span>
-          <span style={{fontSize:"14px",fontWeight:600,color:"var(--blue)"}}>Cliquer pour ajouter votre logo</span>
-          <span style={{fontSize:"11px",color:"var(--gray)"}}>PNG, JPG, SVG · Max 2 Mo</span>
-          <input type="file" accept="image/*" onChange={handleLogoUpload} style={{display:"none"}}/>
+        <label style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"8px",padding:"24px",border:"2px dashed var(--border)",borderRadius:"10px",cursor:uploading?"not-allowed":"pointer",background:"var(--off)",opacity:uploading?0.6:1}}>
+          <span style={{fontSize:"32px"}}>{uploading?"⏳":"🖼️"}</span>
+          <span style={{fontSize:"14px",fontWeight:600,color:"var(--blue)"}}>{uploading?"Upload en cours...":"Cliquer pour ajouter votre logo"}</span>
+          <span style={{fontSize:"11px",color:"var(--gray)"}}>PNG, JPG, SVG · Max 3 Mo · Stocké sur Cloudinary</span>
+          <input type="file" accept="image/*" onChange={handleLogoUpload} style={{display:"none"}} disabled={uploading}/>
         </label>
       )}
     </div>
@@ -1628,3 +1629,4 @@ export function AdminParams() {
     </div>
   </div>;
 }
+

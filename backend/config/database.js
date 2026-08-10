@@ -195,6 +195,12 @@ async function _createSchema() {
       fichier TEXT NOT NULL, taille INTEGER, mime_type TEXT,
       notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS settings (
+      id SERIAL PRIMARY KEY,
+      key TEXT UNIQUE NOT NULL,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
     CREATE TABLE articles (
       id SERIAL PRIMARY KEY, titre TEXT NOT NULL, slug TEXT UNIQUE,
       categorie TEXT DEFAULT 'Actualités', resume TEXT, contenu TEXT,
@@ -265,3 +271,4 @@ async function exec(sql) {
 }
 
 module.exports = { prepare, exec, initDb };
+

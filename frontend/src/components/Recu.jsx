@@ -1,5 +1,14 @@
 // components/Recu.jsx — Génération de reçus PDF imprimables
-import { AG } from "../utils.js";
+import { AG, API } from "../utils.js";
+
+// Récupère le logo depuis l'API settings (Cloudinary)
+async function getLogoUrl() {
+  try {
+    const r = await fetch(`${API}/settings`);
+    const d = await r.json();
+    return d.logo || "";
+  } catch { return ""; }
+}
 
 const fmt = n => new Intl.NumberFormat("fr-CI").format(Math.round(n||0));
 const today = () => new Date().toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"});
@@ -47,14 +56,15 @@ export function imprimerRecu(html) {
 }
 
 // ── Reçu de loyer (quittance) ────────────────────────────────
-export function genererQuittanceLoyer({ loyer, client, bien }) {
+export async function genererQuittanceLoyer({ loyer, client, bien }) {
+  const logoUrl = await getLogoUrl();
   const num = `QUI-${(loyer.id||"").toString().padStart(4,"0")}-${(loyer.mois||"").replace("-","")}`;
   const moisFmt = new Date((loyer.mois||"2025-01")+"-01").toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
   const html = `
     <div class="header">
       <div class="logo-block">
         ${AG.logo
-          ? `<img src="${AG.logo}" alt="ImmobilierCI" style="height:60px;max-width:200px;object-fit:contain;margin-bottom:8px;display:block;"/>`
+          ? `<img src="${logoUrl}" alt="ImmobilierCI" style="height:60px;max-width:200px;object-fit:contain;margin-bottom:8px;display:block;"/>`
           : `<div class="name">ImmobilierCI</div>`
         }
         <div class="tagline">${AG.slogan}</div>
@@ -128,14 +138,15 @@ export function genererQuittanceLoyer({ loyer, client, bien }) {
 }
 
 // ── Reçu de vente / acompte ──────────────────────────────────
-export function genererRecuVente({ vente, paiement, bien }) {
+export async function genererRecuVente({ vente, paiement, bien }) {
+  const logoUrl = await getLogoUrl();
   const num = `RCV-${(vente.id||"").toString().padStart(4,"0")}-${(paiement?.id||"").toString().padStart(4,"0")}`;
   const typePai = { acompte:"Acompte", solde:"Solde final", frais:"Frais d'agence", autre:"Autre versement" };
   const html = `
     <div class="header">
       <div class="logo-block">
         ${AG.logo
-          ? `<img src="${AG.logo}" alt="ImmobilierCI" style="height:60px;max-width:200px;object-fit:contain;margin-bottom:8px;display:block;"/>`
+          ? `<img src="${logoUrl}" alt="ImmobilierCI" style="height:60px;max-width:200px;object-fit:contain;margin-bottom:8px;display:block;"/>`
           : `<div class="name">ImmobilierCI</div>`
         }
         <div class="tagline">${AG.slogan}</div>
