@@ -4,7 +4,6 @@ import { useCtx } from "./context.jsx";
 import { Badge, Inp, Sel, Txta, Modal, KpiCard, Gallery, PhotoUpload } from "./ui.jsx";
 import { fmt, fmtM, wa, photoSrc, TL, SL, SC, ETAPES_VENTE, API, AG } from "./utils.js";
 import { genererQuittanceLoyer, genererRecuVente } from "./components/Recu.jsx";
-import { useSettings } from "./hooks/useSettings.js";
 import { DocumentsPanel } from "./components/Documents.jsx";
 
 // Btn mini inline pour admin
@@ -235,9 +234,10 @@ export function AdminBiens() {
               {peutEcrire&&<td className="px-4 py-3"><div className="flex gap-1.5">
                 <Btn variant="outline" size="xs" onClick={()=>{setForm({...b,prix:String(b.prix),surface:String(b.surface||""),chambres:String(b.chambres||""),sdb:String(b.sdb||""),etage:String(b.etage||""),parking:String(b.parking||""),featured:b.featured===1});setModal(b);}}>✏️</Btn>
                 <Btn variant="danger" size="xs" onClick={()=>{
-                  if(b.statut==="loue") return alert("❌ Impossible : ce bien est actuellement loué. Changez le statut avant de supprimer.");
-                  if(b.statut==="en_cours") return alert("❌ Impossible : une vente est en cours sur ce bien.");
-                  if(!confirm(`Supprimer "${b.titre}" définitivement ?`)) return;
+                  if(b.statut==="loue") return alert("❌ Impossible de supprimer : ce bien est actuellement loué.\n\nPour libérer le bien :\n1. Allez dans Clients\n2. Ouvrez la fiche du locataire\n3. Cliquez « 🔑 Libérer le bien »");
+                  if(b.statut==="en_cours") return alert("❌ Impossible : une vente est en cours sur ce bien.\nAnnulez la vente avant de supprimer le bien.");
+                  if(b.statut==="vendu") return alert("❌ Impossible : ce bien a été vendu.\nArchivez-le plutôt (statut = Archivé).");
+                  if(!confirm(`Supprimer "${b.titre}" définitivement ?\nToutes les photos et données associées seront perdues.`)) return;
                   deleteBien(b.id);
                 }}>🗑️</Btn>
               </div></td>}
@@ -330,8 +330,23 @@ export function AdminClients() {
   const peutEcrire = canWrite("clients");
   const [search,setSearch] = useState(""); const [tab,setTab] = useState("all");
   const [modal,setModal]   = useState(null); const [detailC,setDetailC] = useState(null);
+  const [etatLieuxModal, setEtatLieuxModal] = useState(null); // client pour état des lieux sortie
+  const [etatLieux, setEtatLieux] = useState({dateSortie:"",caution_rendue:false,observations:"",pieces:{salon:"",cuisine:"",chambre1:"",chambre2:"",sdb:"",wc:"",autres:""}});
   const empty = {nom:"",email:"",tel:"",whatsapp:"",type:"locataire",bienId:"",dateEntree:"",dateSortie:"",caution:"",loyer:"",profession:"",employeur:"",revenus:"",piece_identite:"",notes:""};
   const [f,setF] = useState(empty); const sf=(k,v)=>setF(p=>({...p,[k]:v}));
+  const libererBien = async (client, etatLieuxData) => {
+    if (!confirm(`Confirmer la libération du bien par ${client.nom} ?\nLe bien repassera en Disponible.`)) return;
+    // Mettre à jour le client : retirer le bien, ajouter date de sortie
+    await updateClient(client.id, {
+      ...client,
+      bienId: null,
+      dateSortie: etatLieuxData.dateSortie || new Date().toISOString().split("T")[0],
+      notes: (client.notes || "") + (etatLieuxData.observations ? `\n[ÉTAT DES LIEUX SORTIE ${new Date().toLocaleDateString("fr-FR")}] ${etatLieuxData.observations}` : ""),
+    });
+    setEtatLieuxModal(null);
+    setDetailC(null);
+  };
+
   const save = async() => {
     if(!f.nom) return;
     const d = {...f,bienId:f.bienId?+f.bienId:null,caution:+f.caution||0,loyer:+f.loyer||0,revenus:+f.revenus||null};
@@ -411,12 +426,76 @@ export function AdminClients() {
               </div>
             ))}</div>}
           </div>
-          <div className="flex gap-3 pt-2 border-t border-gray-100">
-            <div className="flex gap-3"><a href={`https://wa.me/${(detailC.whatsapp||detailC.tel||"").replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" className="btn-wa">WhatsApp</a><a href={`tel:${detailC.tel}`} className="btn-primary">Appeler</a></div>
+          <div className="flex gap-3 pt-2 border-t border-gray-100 flex-wrap">
+            <a href={`https://wa.me/${(detailC.whatsapp||detailC.tel||"").replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" className="btn-wa">WhatsApp</a>
+            <a href={`tel:${detailC.tel}`} className="btn-primary">Appeler</a>
+            {detailC.type==="locataire" && detailC.bienId && (
+              <button onClick={()=>{
+                setEtatLieuxModal(detailC);
+                setEtatLieux({dateSortie:new Date().toISOString().split("T")[0],caution_rendue:false,observations:"",pieces:{salon:"",cuisine:"",chambre1:"",chambre2:"",sdb:"",wc:"",autres:""}});
+              }} style={{padding:"8px 16px",border:"1px solid #f59e0b",borderRadius:"8px",background:"#fffbeb",color:"#92400e",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+                🔑 Libérer le bien
+              </button>
+            )}
           </div>
         </div>;
       })()}
     </Modal>
+
+    {/* Modal État des lieux de sortie */}
+    {etatLieuxModal && (
+      <Modal open title={`🔑 Libération du bien — ${etatLieuxModal.nom}`} onClose={()=>setEtatLieuxModal(null)} wide>
+        <div className="space-y-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+            <strong>Bien loué :</strong> {biens.find(b=>b.id===etatLieuxModal.bienId)?.titre || "—"}<br/>
+            <strong>Locataire :</strong> {etatLieuxModal.nom} · Entrée le {etatLieuxModal.dateEntree || "—"}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Inp label="Date de sortie *" type="date" value={etatLieux.dateSortie}
+              onChange={e=>setEtatLieux(p=>({...p,dateSortie:e.target.value}))}/>
+            <div className="flex items-center gap-3 pt-6">
+              <input type="checkbox" id="caution" checked={etatLieux.caution_rendue}
+                onChange={e=>setEtatLieux(p=>({...p,caution_rendue:e.target.checked}))}
+                className="w-4 h-4 rounded"/>
+              <label htmlFor="caution" className="text-sm font-medium">
+                ✅ Caution remboursée ({fmt(etatLieuxModal.caution||0)} FCFA)
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">État des pièces</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[["salon","Salon / Séjour"],["cuisine","Cuisine"],["chambre1","Chambre 1"],["chambre2","Chambre 2"],["sdb","Salle de bain"],["wc","WC"],["autres","Autres"]].map(([k,l])=>(
+                <div key={k}>
+                  <label className="text-xs font-semibold text-gray-500 block mb-1">{l}</label>
+                  <select value={etatLieux.pieces[k]} onChange={e=>setEtatLieux(p=>({...p,pieces:{...p.pieces,[k]:e.target.value}}))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                    <option value="">— État —</option>
+                    <option value="Bon état">✅ Bon état</option>
+                    <option value="État correct">🟡 État correct</option>
+                    <option value="À rénover">🔴 À rénover</option>
+                    <option value="Non applicable">N/A</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <Txta label="Observations générales" rows={3} value={etatLieux.observations}
+            onChange={e=>setEtatLieux(p=>({...p,observations:e.target.value}))}
+            placeholder="Dégradations constatées, travaux nécessaires, retenue sur caution..."/>
+
+          <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
+            <Btn variant="outline" onClick={()=>setEtatLieuxModal(null)}>Annuler</Btn>
+            <Btn variant="primary" onClick={()=>libererBien(etatLieuxModal, etatLieux)}>
+              🔑 Confirmer la libération
+            </Btn>
+          </div>
+        </div>
+      </Modal>
+    )}
 
     {/* Formulaire ajout/modif */}
     <Modal open={!!modal} onClose={()=>setModal(null)} title={modal==="add"?"Nouveau client":`Modifier — ${modal?.nom||""}`} wide>
@@ -1563,50 +1642,50 @@ export function AdminVisites() {
 // ── PARAMÈTRES ────────────────────────────────────────────────
 export function AdminParams() {
   const {online} = useCtx();
-  const { settings, loading: loadingSettings, uploadSetting, deleteSetting } = useSettings();
-  const [uploading, setUploading] = useState(false);
-  const [err, setErr] = useState("");
+  const [logo, setLogo] = useState(localStorage.getItem("ag_logo")||"");
+  const [saving, setSaving] = useState(false);
 
-  const handleLogoUpload = async (e) => {
+  const handleLogoUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploading(true); setErr("");
-    try {
-      await uploadSetting("logo", file);
-      alert("Logo enregistré sur Cloudinary — il apparaîtra sur tous vos reçus.");
-    } catch(e) { setErr(e.message); }
-    finally { setUploading(false); e.target.value = ""; }
+    if (file.size > 2*1024*1024) { alert("Logo trop lourd (max 2 Mo)"); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const url = ev.target.result;
+      setLogo(url);
+      localStorage.setItem("ag_logo", url);
+      alert("Logo enregistré — il apparaîtra sur tous vos reçus.");
+    };
+    reader.readAsDataURL(file);
   };
 
-  const removeLogo = async () => {
-    await deleteSetting("logo");
+  const removeLogo = () => {
+    setLogo("");
+    localStorage.removeItem("ag_logo");
   };
-
-  const logo = settings.logo || "";
 
   return <div className="max-w-2xl space-y-5">
     {/* Logo agence */}
     <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
       <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4">Logo de l'agence</h3>
-      <p className="text-xs text-gray-500 mb-4">Stocké sur Cloudinary — permanent, visible sur tous vos reçus. Max 3 Mo.</p>
-      {err && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"8px",padding:"8px 12px",fontSize:"12px",color:"#dc2626",marginBottom:"12px"}}>{err}</div>}
+      <p className="text-xs text-gray-500 mb-4">Ce logo apparaîtra sur tous vos reçus et documents imprimés. Format recommandé : PNG transparent, max 2 Mo.</p>
       {logo ? (
         <div style={{display:"flex",alignItems:"center",gap:"16px",marginBottom:"12px"}}>
           <img src={logo} alt="Logo" style={{height:"60px",maxWidth:"200px",objectFit:"contain",border:"1px solid var(--border)",borderRadius:"8px",padding:"8px",background:"white"}}/>
           <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-            <label style={{padding:"8px 16px",background:"var(--blue)",color:"white",borderRadius:"8px",cursor:uploading?"not-allowed":"pointer",fontSize:"12px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif",opacity:uploading?0.6:1}}>
-              {uploading ? "Upload..." : "Changer le logo"}
-              <input type="file" accept="image/*" onChange={handleLogoUpload} style={{display:"none"}} disabled={uploading}/>
+            <label style={{padding:"8px 16px",background:"var(--blue)",color:"white",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+              Changer le logo
+              <input type="file" accept="image/*" onChange={handleLogoUpload} style={{display:"none"}}/>
             </label>
             <button onClick={removeLogo} style={{padding:"8px 16px",border:"1px solid #fecaca",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:700,color:"#dc2626",background:"#fef2f2",fontFamily:"Plus Jakarta Sans,sans-serif"}}>Supprimer</button>
           </div>
         </div>
       ) : (
-        <label style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"8px",padding:"24px",border:"2px dashed var(--border)",borderRadius:"10px",cursor:uploading?"not-allowed":"pointer",background:"var(--off)",opacity:uploading?0.6:1}}>
-          <span style={{fontSize:"32px"}}>{uploading?"⏳":"🖼️"}</span>
-          <span style={{fontSize:"14px",fontWeight:600,color:"var(--blue)"}}>{uploading?"Upload en cours...":"Cliquer pour ajouter votre logo"}</span>
-          <span style={{fontSize:"11px",color:"var(--gray)"}}>PNG, JPG, SVG · Max 3 Mo · Stocké sur Cloudinary</span>
-          <input type="file" accept="image/*" onChange={handleLogoUpload} style={{display:"none"}} disabled={uploading}/>
+        <label style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"8px",padding:"24px",border:"2px dashed var(--border)",borderRadius:"10px",cursor:"pointer",background:"var(--off)"}}>
+          <span style={{fontSize:"32px"}}>🖼️</span>
+          <span style={{fontSize:"14px",fontWeight:600,color:"var(--blue)"}}>Cliquer pour ajouter votre logo</span>
+          <span style={{fontSize:"11px",color:"var(--gray)"}}>PNG, JPG, SVG · Max 2 Mo</span>
+          <input type="file" accept="image/*" onChange={handleLogoUpload} style={{display:"none"}}/>
         </label>
       )}
     </div>
@@ -1629,4 +1708,6 @@ export function AdminParams() {
     </div>
   </div>;
 }
+
+
 
