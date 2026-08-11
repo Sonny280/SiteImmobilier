@@ -95,7 +95,7 @@ router.put("/me/password", auth, passwordLimiter, async (req, res) => {
   const pwdErr = validatePassword(nouveau);
   if (pwdErr) return res.status(400).json({ error: pwdErr });
   const hash = await bcrypt.hash(nouveau, 12);
-  await prepare("UPDATE users SET password=?,updatedAt=datetime('now') WHERE id=?").run(hash, req.user.id);
+  await prepare("UPDATE users SET password=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(hash, req.user.id);
   res.json({ success: true, message: "Mot de passe modifié." });
 });
 
@@ -113,3 +113,5 @@ router.delete("/:id", auth, superAdmin, async (req, res) => {
 });
 
 module.exports = router;
+
+
