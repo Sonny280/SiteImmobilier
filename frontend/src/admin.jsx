@@ -817,7 +817,7 @@ export function AdminVentes() {
 
   const emptyF = {
     bienId:"",
-    acheteurNom:"",acheteurTel:"",acheteurEmail:"",
+    acheteurId:null,acheteurNom:"",acheteurTel:"",acheteurEmail:"",
     vendeurNom:"",vendeurTel:"",
     prixAffiche:"",prixNegociation:"",prixFinal:"",
     tauxCommission:"5",
@@ -999,6 +999,26 @@ export function AdminVentes() {
 
         {/* Acheteur */}
         <div className="col-span-2 text-xs font-bold text-gray-500 uppercase tracking-wider border-t pt-3">Acheteur</div>
+        <div className="col-span-2">
+          <Sel label="Choisir un client existant (optionnel)" value={f.acheteurId||""} onChange={e=>{
+            const id = +e.target.value;
+            sf("acheteurId", id||null);
+            if(id) {
+              const c = clients.find(x=>x.id===id);
+              if(c) {
+                sf("acheteurNom", c.nom);
+                sf("acheteurTel", c.tel||c.whatsapp||"");
+                sf("acheteurEmail", c.email||"");
+              }
+            }
+          }}>
+            <option value="">— Saisie libre (nouveau contact) —</option>
+            {clients.filter(c=>["acheteur","prospect"].includes(c.type)).map(c=>(
+              <option key={c.id} value={c.id}>{c.nom} — {c.tel||c.email||"—"}</option>
+            ))}
+          </Sel>
+          <p style={{fontSize:"11px",color:"var(--gray)",marginTop:"4px"}}>Sélectionnez un client existant pour remplir automatiquement ses informations, ou laissez vide pour saisir manuellement.</p>
+        </div>
         <Inp label="Nom complet *" value={f.acheteurNom} onChange={e=>sf("acheteurNom",e.target.value)} placeholder="Kouamé Aya"/>
         <Inp label="Téléphone *" value={f.acheteurTel} onChange={e=>sf("acheteurTel",e.target.value)} placeholder="+225 07..."/>
         <Inp label="Email" value={f.acheteurEmail} onChange={e=>sf("acheteurEmail",e.target.value)}/>
@@ -1708,6 +1728,5 @@ export function AdminParams() {
     </div>
   </div>;
 }
-
 
 
