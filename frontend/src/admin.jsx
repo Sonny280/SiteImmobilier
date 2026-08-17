@@ -1014,7 +1014,7 @@ export function AdminVentes() {
             const id = +e.target.value;
             sf("acheteurId", id||null);
             if(id) {
-              const c = clients.find(x=>x.id===id);
+              const c = clientsLocal.find(x=>x.id===id);
               if(c) {
                 sf("acheteurNom", c.nom);
                 sf("acheteurTel", c.tel||c.whatsapp||"");
