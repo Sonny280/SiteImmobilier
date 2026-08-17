@@ -4,6 +4,7 @@ import { useCtx } from "./context.jsx";
 import { Badge, Inp, Sel, Txta, Modal, KpiCard, Gallery, PhotoUpload } from "./ui.jsx";
 import { fmt, fmtM, wa, photoSrc, TL, SL, SC, ETAPES_VENTE, API, AG } from "./utils.js";
 import { genererQuittanceLoyer, genererRecuVente } from "./components/Recu.jsx";
+import { genererContratBail, genererContratVente } from "./utils/genContrats.js";
 import { DocumentsPanel } from "./components/Documents.jsx";
 
 // Btn mini inline pour admin
@@ -435,6 +436,15 @@ export function AdminClients() {
                 setEtatLieux({dateSortie:new Date().toISOString().split("T")[0],caution_rendue:false,observations:"",pieces:{salon:"",cuisine:"",chambre1:"",chambre2:"",sdb:"",wc:"",autres:""}});
               }} style={{padding:"8px 16px",border:"1px solid #f59e0b",borderRadius:"8px",background:"#fffbeb",color:"#92400e",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>
                 🔑 Libérer le bien
+              </button>
+            )}
+            {detailC.type==="locataire" && (
+              <button onClick={()=>genererContratBail({
+                client: detailC,
+                bien: biens.find(b=>b.id===detailC.bienId),
+                contrat: contrats.find(c=>c.clientId===detailC.id),
+              })} style={{padding:"8px 16px",border:"1px solid #5c1a2b",borderRadius:"8px",background:"#fdf8f5",color:"#5c1a2b",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+                📄 Contrat de bail
               </button>
             )}
           </div>
@@ -1728,5 +1738,4 @@ export function AdminParams() {
     </div>
   </div>;
 }
-
 
