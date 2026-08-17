@@ -541,7 +541,7 @@ export function AdminClients() {
 
 // ── LOYERS — sans pénalités ────────────────────────────────
 export function AdminLoyers() {
-  const {loyers,clients,biens,payerLoyer,addLoyer,deleteLoyer,relancerLoyer,genererMoisLoyers,canWrite} = useCtx();
+  const {loyers,clients,biens,contrats,payerLoyer,addLoyer,deleteLoyer,relancerLoyer,genererMoisLoyers,canWrite} = useCtx();
   const peutEcrire = canWrite("loyers");
   const [mois,   setMois]   = useState(new Date().toISOString().slice(0,7));
   const [tab,    setTab]    = useState("all");
@@ -1734,7 +1734,7 @@ export function AdminParams() {
     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-800 space-y-2">
       <p><strong>📷 Upload photos</strong> : Images converties en base64 dans le navigateur → envoyées au serveur. Compatible Windows/Mac/Linux.</p>
       <p><strong>⏰ Retards</strong> : Le calcul des retards est informatif uniquement. Aucune pénalité automatique n'est appliquée.</p>
-      <p><strong>📄 Contrats</strong> : Les alertes d'expiration apparaissent 60 jours avant la date de fin</p>
+      <p><strong>📄 Contrats</strong> : Les alertes d'expiration apparaissent 60 jours avant la date de fin.</p>
     </div>
   </div>;
 }
