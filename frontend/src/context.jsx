@@ -126,7 +126,11 @@ export function Provider({ children }) {
     } catch(e){ showToast(e.message,"warn"); }
   },[api,online,showToast]);
 
-  useEffect(()=>{ if(page==="admin") loadAdmin(); },[page]);
+  // Charger les données admin dès que l'utilisateur est connecté
+  // et quand on revient sur l'onglet admin
+  useEffect(()=>{
+    if(user && online) loadAdmin();
+  },[user, online]);
 
   const login = async(email,pwd)=>{
     const headers = {"Content-Type":"application/json"};
@@ -219,3 +223,4 @@ export function Provider({ children }) {
     </Ctx.Provider>
   );
 }
+
