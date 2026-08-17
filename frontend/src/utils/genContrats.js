@@ -1,7 +1,7 @@
 // utils/genContrats.js — Génération contrats Word depuis les données du logiciel
 // Utilise la même librairie docx que les reçus mais côté backend via une route API
 
-import { AG } from "./utils.js";
+import { AG } from "../utils.js";
 
 // Convertit un nombre en lettres (FCFA)
 function nombreEnLettres(n) {
@@ -343,5 +343,4 @@ export function genererContratVente({ vente, bien, client }) {
   w.document.write(html);
   w.document.close();
 }
-
 
