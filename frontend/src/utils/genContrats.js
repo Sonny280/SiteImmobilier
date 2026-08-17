@@ -343,4 +343,3 @@ export function genererContratVente({ vente, bien, client }) {
   w.document.write(html);
   w.document.close();
 }
-
