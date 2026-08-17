@@ -15,7 +15,7 @@ const today = () => new Date().toLocaleDateString("fr-FR",{day:"numeric",month:"
 
 // Génère le HTML du reçu et l'ouvre dans une nouvelle fenêtre pour impression/PDF
 export function imprimerRecu(html) {
-  const w = window.open("","_blank","width=800,height=900");
+  const w = window.open("","_blank","width=620,height=750");
   w.document.write(`<!DOCTYPE html><html lang="fr"><head>
     <meta charset="UTF-8"/>
     <title>Reçu ImmobilierCI</title>
