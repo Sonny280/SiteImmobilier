@@ -541,7 +541,7 @@ export function AdminClients() {
 
 // ── LOYERS — sans pénalités ────────────────────────────────
 export function AdminLoyers() {
-  const {loyers,clients,biens,contrats,payerLoyer,addLoyer,deleteLoyer,relancerLoyer,genererMoisLoyers,canWrite} = useCtx();
+  const {loyers,clients,biens,payerLoyer,addLoyer,deleteLoyer,relancerLoyer,genererMoisLoyers,canWrite} = useCtx();
   const peutEcrire = canWrite("loyers");
   const [mois,   setMois]   = useState(new Date().toISOString().slice(0,7));
   const [tab,    setTab]    = useState("all");
