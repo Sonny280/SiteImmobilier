@@ -1014,13 +1014,14 @@ export function AdminVentes() {
             const id = +e.target.value;
             sf("acheteurId", id||null);
             if(id) {
-              const c = clientsLocal.find(x=>x.id===id);
+              const c = clients.find(x=>x.id===id);
               if(c) {
                 sf("acheteurNom", c.nom);
                 sf("acheteurTel", c.tel||c.whatsapp||"");
                 sf("acheteurEmail", c.email||"");
               }
             }
+            
           }}>
             <option value="">— Saisie libre (nouveau contact) —</option>
             {clients.filter(c=>["acheteur","prospect"].includes(c.type)).map(c=>(
