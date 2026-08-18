@@ -1738,4 +1738,3 @@ export function AdminParams() {
     </div>
   </div>;
 }
-
