@@ -94,6 +94,17 @@ app.use((err,req,res,_)=>{
   res.status(err.status||500).json({error:err.message||"Erreur serveur"});
 });
 
+// Servir le frontend React depuis backend/public
+const PUBLIC = require("path").join(__dirname, "public");
+if (require("fs").existsSync(PUBLIC)) {
+  app.use(express.static(PUBLIC));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) return next();
+    res.sendFile(require("path").join(PUBLIC, "index.html"));
+  });
+  console.log("✅ Frontend servi depuis backend/public");
+}
+
 initDb().then(()=>{
   app.listen(PORT,()=>{
     console.log(`✅  ImmobilierCI API  →  http://localhost:${PORT}`);
