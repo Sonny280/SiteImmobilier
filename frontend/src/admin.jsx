@@ -326,220 +326,459 @@ export function AdminBiens() {
 }
 
 // ── CLIENTS ───────────────────────────────────────────────────
+// AdminClients — 3 onglets : Locataires | Acheteurs | Prospects
+// Intégré dans admin.jsx comme fonction export
+
+const TYPE_CONFIG = {
+  locataire: { label:"Locataire", icon:"🏠", color:"#1d4ed8", bg:"#eff6ff", border:"#bfdbfe" },
+  acheteur:  { label:"Acheteur",  icon:"💰", color:"#15803d", bg:"#f0fdf4", border:"#bbf7d0" },
+  prospect:  { label:"Prospect",  icon:"👤", color:"#92400e", bg:"#fffbeb", border:"#fde68a" },
+};
+
+function BadgeType({type}) {
+  const c = TYPE_CONFIG[type] || TYPE_CONFIG.prospect;
+  return (
+    <span style={{
+      display:"inline-flex", alignItems:"center", gap:"4px",
+      padding:"3px 10px", borderRadius:"20px", fontSize:"11px",
+      fontWeight:700, background:c.bg, color:c.color, border:`1px solid ${c.border}`
+    }}>
+      {c.icon} {c.label}
+    </span>
+  );
+}
+
+// AdminClients v3 — multi-rôles (locataire + acheteur + prospect)
+
+const TYPE_CONFIG = {
+  locataire: { label:"Locataire", icon:"🏠", color:"#1d4ed8", bg:"#eff6ff", border:"#bfdbfe" },
+  acheteur:  { label:"Acheteur",  icon:"💰", color:"#15803d", bg:"#f0fdf4", border:"#bbf7d0" },
+  prospect:  { label:"Prospect",  icon:"👤", color:"#92400e", bg:"#fffbeb", border:"#fde68a" },
+};
+
+function BadgeType({role}) {
+  const c = TYPE_CONFIG[role] || TYPE_CONFIG.prospect;
+  return (
+    <span style={{
+      display:"inline-flex",alignItems:"center",gap:"4px",
+      padding:"3px 10px",borderRadius:"20px",fontSize:"11px",fontWeight:700,
+      background:c.bg,color:c.color,border:`1px solid ${c.border}`
+    }}>{c.icon} {c.label}</span>
+  );
+}
+
+function getRoles(c) {
+  if (!c.roles) return [c.type || "prospect"];
+  return c.roles.split(",").map(r=>r.trim()).filter(Boolean);
+}
+
 export function AdminClients() {
-  const {clients,biens,loyers,addClient,updateClient,deleteClient,canWrite} = useCtx();
-  const peutEcrire = canWrite("clients");
-  const [search,setSearch] = useState(""); const [tab,setTab] = useState("all");
-  const [modal,setModal]   = useState(null); const [detailC,setDetailC] = useState(null);
-  const [etatLieuxModal, setEtatLieuxModal] = useState(null); // client pour état des lieux sortie
+  const {biens,clients,addClient,updateClient,deleteClient,canWrite,showToast} = useCtx();
+  const [onglet,  setOnglet]  = useState("locataire");
+  const [modal,   setModal]   = useState(null);
+  const [detailC, setDetailC] = useState(null);
+  const [etatLieuxModal, setEtatLieuxModal] = useState(null);
   const [etatLieux, setEtatLieux] = useState({dateSortie:"",caution_rendue:false,observations:"",pieces:{salon:"",cuisine:"",chambre1:"",chambre2:"",sdb:"",wc:"",autres:""}});
-  const empty = {nom:"",email:"",tel:"",whatsapp:"",type:"locataire",bienId:"",dateEntree:"",dateSortie:"",caution:"",loyer:"",profession:"",employeur:"",revenus:"",piece_identite:"",notes:""};
-  const [f,setF] = useState(empty); const sf=(k,v)=>setF(p=>({...p,[k]:v}));
-  const libererBien = async (client, etatLieuxData) => {
-    if (!confirm(`Confirmer la libération du bien par ${client.nom} ?\nLe bien repassera en Disponible.`)) return;
-    // Mettre à jour le client : retirer le bien, ajouter date de sortie
+  const [search, setSearch] = useState("");
+
+  const emptyF = {
+    nom:"", email:"", tel:"", whatsapp:"",
+    roles:"locataire",
+    bienId:"", loyer:"", caution:"", dateEntree:"", dateSortie:"",
+    profession:"", employeur:"", revenus:"", piece_identite:"",
+    budget:"", modeFinancement:"cash", banque:"", typeRecherche:"",
+    notes:""
+  };
+  const [f, setF] = useState({...emptyF});
+  const sf = (k,v) => setF(p=>({...p,[k]:v}));
+
+  const toggleRole = (role) => {
+    const current = f.roles.split(",").map(r=>r.trim()).filter(Boolean);
+    let next;
+    if (current.includes(role)) {
+      next = current.filter(r=>r!==role);
+      if (next.length === 0) next = ["prospect"];
+    } else {
+      next = [...current.filter(r=>r!=="prospect"), role];
+    }
+    sf("roles", next.join(","));
+    // type principal = premier rôle
+    sf("type", next[0]);
+  };
+
+  const hasRole = (role) => f.roles.split(",").map(r=>r.trim()).includes(role);
+
+  // Filtrer clients par onglet (apparaît si le client a ce rôle)
+  const liste = clients
+    .filter(c => {
+      const roles = getRoles(c);
+      return roles.includes(onglet);
+    })
+    .filter(c => !search || c.nom?.toLowerCase().includes(search.toLowerCase()) || c.tel?.includes(search));
+
+  const openNew = () => {
+    setF({...emptyF, roles:onglet, type:onglet});
+    setModal("new");
+  };
+  const openEdit = (c) => {
+    setF({
+      ...emptyF, ...c,
+      roles: c.roles || c.type || "prospect",
+      bienId: c.bienId || c.bien_id || "",
+      dateEntree: c.dateEntree || c.date_entree || "",
+      dateSortie: c.dateSortie || c.date_sortie || "",
+      piece_identite: c.pieceIdentite || c.piece_identite || "",
+    });
+    setModal(c);
+  };
+
+  const save = async () => {
+    if (!f.nom.trim()) return showToast("Le nom est requis","warn");
+    const data = {...f, type: f.roles.split(",")[0]};
+    if (modal==="new") await addClient(data);
+    else await updateClient(modal.id, data);
+    setModal(null);
+  };
+
+  const libererBien = async (client, el) => {
+    const roles = getRoles(client);
     await updateClient(client.id, {
       ...client,
       bienId: null,
-      dateSortie: etatLieuxData.dateSortie || new Date().toISOString().split("T")[0],
-      notes: (client.notes || "") + (etatLieuxData.observations ? `\n[ÉTAT DES LIEUX SORTIE ${new Date().toLocaleDateString("fr-FR")}] ${etatLieuxData.observations}` : ""),
+      bien_id: null,
+      dateSortie: el.dateSortie || new Date().toISOString().split("T")[0],
+      notes: (client.notes||"") + (el.observations ? `\n[ÉTAT DES LIEUX SORTIE ${new Date().toLocaleDateString("fr-FR")}] ${el.observations}` : ""),
     });
     setEtatLieuxModal(null);
     setDetailC(null);
   };
 
-  const save = async() => {
-    if(!f.nom) return;
-    const d = {...f,bienId:f.bienId?+f.bienId:null,caution:+f.caution||0,loyer:+f.loyer||0,revenus:+f.revenus||null};
-    modal==="add" ? await addClient(d) : await updateClient(modal.id,d);
-    setModal(null);
-  };
-  const filtered = clients.filter(c=>(tab==="all"||c.type===tab)&&(!search||`${c.nom} ${c.tel||""}`.toLowerCase().includes(search.toLowerCase())));
+  const BIENS_DISPO = biens.filter(b => b.statut==="disponible" || (f.bienId && b.id===+f.bienId));
+  const fmt = n => n ? new Intl.NumberFormat("fr-CI").format(n) + " FCFA" : "—";
 
-  return <div>
-    <div className="flex flex-col sm:flex-row gap-3 mb-6">
-      <input placeholder="🔍 Nom, téléphone..." className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" value={search} onChange={e=>setSearch(e.target.value)}/>
-      <div className="flex gap-2 flex-wrap">
-        {[["all","Tous"],["locataire","Locataires"],["acheteur","Acheteurs"],["prospect","Prospects"],["proprietaire","Propriétaires"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setTab(k)} className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${tab===k?"bg-emerald-600 text-white border-emerald-600":"bg-white text-gray-600 border-gray-300"}`}>{l}</button>
-        ))}
+  return (
+    <div>
+      {/* Onglets */}
+      <div style={{display:"flex",gap:"8px",marginBottom:"20px",flexWrap:"wrap",alignItems:"center"}}>
+        {["locataire","acheteur","prospect"].map(t => {
+          const cfg = TYPE_CONFIG[t];
+          const nb = clients.filter(c=>getRoles(c).includes(t)).length;
+          return (
+            <button key={t} onClick={()=>setOnglet(t)} style={{
+              padding:"8px 20px",borderRadius:"20px",cursor:"pointer",
+              fontWeight:onglet===t?700:500,fontSize:"13px",
+              fontFamily:"Plus Jakarta Sans,sans-serif",
+              background:onglet===t?cfg.color:"white",
+              color:onglet===t?"white":cfg.color,
+              border:`2px solid ${onglet===t?cfg.color:cfg.border}`,
+            }}>
+              {cfg.icon} {cfg.label}s ({nb})
+            </button>
+          );
+        })}
+        <div style={{flex:1}}/>
+        <input type="text" placeholder="🔍 Rechercher..." value={search} onChange={e=>setSearch(e.target.value)}
+          style={{padding:"8px 14px",border:"1.5px solid var(--border)",borderRadius:"20px",fontSize:"13px",fontFamily:"Plus Jakarta Sans,sans-serif",outline:"none",width:"180px"}}/>
+        {canWrite("clients") && (
+          <button onClick={openNew} style={{padding:"9px 20px",background:TYPE_CONFIG[onglet].color,color:"white",border:"none",borderRadius:"8px",cursor:"pointer",fontWeight:700,fontSize:"13px",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+            + {TYPE_CONFIG[onglet].icon} {TYPE_CONFIG[onglet].label}
+          </button>
+        )}
       </div>
-      {peutEcrire&&<Btn variant="primary" onClick={()=>{setF(empty);setModal("add");}}>+ Ajouter</Btn>}
-    </div>
 
-    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-      <div className="overflow-x-auto"><table className="w-full min-w-[600px]">
-        <thead><tr className="border-b border-gray-100 bg-gray-50">
-          {["Client","Type","Contact","Bien","Loyer/mois","Caution","Actions"].map(h=><th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">{h}</th>)}
-        </tr></thead>
-        <tbody className="divide-y divide-gray-50">{filtered.map(c=>(
-          <tr key={c.id} className="hover:bg-gray-50">
-            <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-sm font-bold text-emerald-700 flex-shrink-0">{(c.nom||"?").slice(0,2)}</div><div><div className="text-sm font-semibold text-gray-900">{c.nom}</div>{c.profession&&<div className="text-xs text-gray-400">{c.profession}{c.employeur?` · ${c.employeur}`:""}</div>}</div></div></td>
-            <td className="px-4 py-3"><Badge label={c.type} color={c.type==="locataire"?"bg-emerald-100 text-emerald-700 border-emerald-200":c.type==="acheteur"?"bg-orange-100 text-orange-700 border-orange-200":c.type==="proprietaire"?"bg-purple-100 text-purple-700 border-purple-200":"bg-gray-100 text-gray-600 border-gray-200"}/></td>
-            <td className="px-4 py-3"><div className="text-xs text-gray-700 mb-1">{c.tel}</div><div className="flex gap-1.5"><a href={`https://wa.me/${(c.whatsapp||c.tel||"").replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg font-semibold text-white" style={{background:"#25D366"}}>WA</a><a href={`tel:${c.tel}`} className="text-xs px-2.5 py-1.5 rounded-lg font-semibold text-white bg-blue-700">TEL</a></div></td>
-            <td className="px-4 py-3 text-xs text-gray-500 max-w-[130px] truncate">{c.bienTitre||biens.find(b=>b.id===c.bienId)?.titre||"—"}</td>
-            <td className="px-4 py-3 text-sm font-semibold text-gray-800">{c.loyer?`${fmt(c.loyer)} F`:"—"}</td>
-            <td className="px-4 py-3 text-sm text-gray-600">{c.caution?`${fmt(c.caution)} F`:"—"}</td>
-            <td className="px-4 py-3"><div className="flex gap-1.5">
-              <Btn variant="ghost" size="xs" onClick={()=>setDetailC(c)} title="Fiche complète">👁</Btn>
-              {peutEcrire&&<Btn variant="outline" size="xs" onClick={()=>{setF({...c,bienId:String(c.bienId||""),caution:String(c.caution||""),loyer:String(c.loyer||""),revenus:String(c.revenus||"")});setModal(c);}}>✏️</Btn>}
-              {peutEcrire&&<Btn variant="danger" size="xs" onClick={()=>{
-                if(c.type==="locataire"&&c.bienId) return alert("❌ Ce client a un bien associé. Retirez-lui le bien avant de supprimer.");
-                if(!confirm(`Supprimer le client "${c.nom}" ?`)) return;
-                deleteClient(c.id);
-              }}>🗑️</Btn>}
-            </div></td>
-          </tr>
-        ))}
-        {filtered.length===0&&<tr><td colSpan={7} className="text-center py-16 text-gray-400">Aucun client</td></tr>}
-        </tbody>
-      </table></div>
-    </div>
-
-    {/* Fiche complète */}
-    <Modal open={!!detailC} onClose={()=>setDetailC(null)} title={`Fiche client — ${detailC?.nom}`} wide>
-      {detailC&&(()=>{
-        const loyersC = loyers.filter(l=>l.clientId===detailC.id).sort((a,b)=>b.mois.localeCompare(a.mois));
-        const totalPaye   = loyersC.filter(l=>l.statut==="paye").reduce((s,l)=>s+l.montant,0);
-        const totalImpaye = loyersC.filter(l=>l.statut!=="paye").reduce((s,l)=>s+l.montant,0);
-        return <div className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            {[["Nom",detailC.nom],["Type",SL[detailC.type]||detailC.type],["Téléphone",detailC.tel||"—"],["WhatsApp",detailC.whatsapp||"—"],["Email",detailC.email||"—"],["Profession",detailC.profession||"—"],["Employeur",detailC.employeur||"—"],["Revenus",detailC.revenus?`${fmt(detailC.revenus)} FCFA/mois`:"—"],["Pièce d'identité",detailC.piece_identite||"—"],["Date d'entrée",detailC.dateEntree||"—"],["Loyer",detailC.loyer?`${fmt(detailC.loyer)} FCFA/mois`:"—"],["Caution versée",detailC.caution?`${fmt(detailC.caution)} FCFA`:"—"]].map(([l,v])=>(
-              <div key={l}><div className="text-xs text-gray-400 font-semibold uppercase tracking-wider">{l}</div><div className="font-medium text-gray-900 mt-0.5">{v}</div></div>
-            ))}
-          </div>
-          {detailC.notes&&<div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600"><strong>Notes :</strong> {detailC.notes}</div>}
-          <div>
-            <h4 className="font-semibold text-gray-900 mb-3">Historique des loyers</h4>
-            <div className="flex gap-3 mb-3 flex-wrap">
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2 text-center"><div className="text-xs text-gray-500">Total payé</div><div className="font-bold text-emerald-600">{fmt(totalPaye)} F</div></div>
-              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2 text-center"><div className="text-xs text-gray-500">Impayés</div><div className="font-bold text-red-600">{fmt(totalImpaye)} F</div></div>
-              <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-center"><div className="text-xs text-gray-500">Total loyers</div><div className="font-bold text-gray-700">{loyersC.length}</div></div>
-            </div>
-            {loyersC.length===0?<p className="text-sm text-gray-400">Aucun loyer enregistré.</p>
-            :<div className="space-y-1.5 max-h-48 overflow-y-auto">{loyersC.map(l=>(
-              <div key={l.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
-                <div className="text-sm"><span className="font-medium">{l.mois}</span><span className="text-gray-400 mx-2">·</span>{fmt(l.montant)} FCFA</div>
-                <div className="flex items-center gap-2">
-                  <Badge label={SL[l.statut]||l.statut} color={SC[l.statut]||""}/>
-                  {(l.joursRetard||0)>0&&<span className="text-xs text-red-600 font-medium">{l.joursRetard}j retard</span>}
+      {/* Liste */}
+      {liste.length === 0 ? (
+        <div style={{textAlign:"center",padding:"60px",background:"var(--off)",borderRadius:"18px",border:"1px solid var(--border)"}}>
+          <div style={{fontSize:"48px",marginBottom:"12px"}}>{TYPE_CONFIG[onglet].icon}</div>
+          <p style={{fontWeight:700,marginBottom:"8px"}}>Aucun {TYPE_CONFIG[onglet].label.toLowerCase()}</p>
+          {canWrite("clients") && <button onClick={openNew} style={{padding:"10px 22px",background:TYPE_CONFIG[onglet].color,color:"white",border:"none",borderRadius:"8px",cursor:"pointer",fontWeight:700,fontSize:"13px",fontFamily:"Plus Jakarta Sans,sans-serif"}}>+ Ajouter</button>}
+        </div>
+      ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+          {liste.map(c => {
+            const roles = getRoles(c);
+            const bien = biens.find(b=>b.id===(c.bienId||c.bien_id));
+            return (
+              <div key={c.id} style={{
+                background:"white",
+                border:`1px solid ${TYPE_CONFIG[roles[0]]?.border||"var(--border)"}`,
+                borderLeft:`4px solid ${TYPE_CONFIG[roles[0]]?.color||"var(--blue)"}`,
+                borderRadius:"14px",padding:"14px 18px",
+                display:"grid",gridTemplateColumns:"1fr auto",gap:"12px",alignItems:"center"
+              }}>
+                <div style={{minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"5px",flexWrap:"wrap"}}>
+                    <span style={{fontWeight:700,fontSize:"15px",color:"var(--text)"}}>{c.nom}</span>
+                    {roles.map(r=><BadgeType key={r} role={r}/>)}
+                    {bien && <span style={{fontSize:"11px",color:"var(--gray)"}}>📍 {bien.titre}</span>}
+                  </div>
+                  <div style={{fontSize:"12px",color:"var(--gray)",display:"flex",gap:"16px",flexWrap:"wrap"}}>
+                    {c.tel && <span>📞 {c.tel}</span>}
+                    {c.loyer > 0 && <span>💰 {new Intl.NumberFormat("fr-CI").format(c.loyer)} FCFA/mois</span>}
+                    {(c.dateEntree||c.date_entree) && <span>📅 {c.dateEntree||c.date_entree}</span>}
+                    {c.profession && <span>💼 {c.profession}</span>}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:"6px",flexShrink:0}}>
+                  <button onClick={()=>setDetailC(c)} style={{padding:"6px 12px",border:"1px solid var(--border)",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:700,background:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>👁 Fiche</button>
+                  {canWrite("clients") && <button onClick={()=>openEdit(c)} style={{padding:"6px 12px",border:"1px solid var(--border)",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:700,background:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>✏️</button>}
+                  {canWrite("clients") && <button onClick={()=>{
+                    if(c.bienId||c.bien_id) return alert("❌ Libérez d'abord le bien avant de supprimer ce client.");
+                    if(!confirm(`Supprimer ${c.nom} ?`)) return;
+                    deleteClient(c.id);
+                  }} style={{padding:"6px 10px",border:"1px solid #fecaca",borderRadius:"7px",cursor:"pointer",fontSize:"11px",color:"#dc2626",background:"#fef2f2",fontFamily:"Plus Jakarta Sans,sans-serif"}}>🗑</button>}
                 </div>
               </div>
-            ))}</div>}
-          </div>
-          <div className="flex gap-3 pt-2 border-t border-gray-100 flex-wrap">
-            <a href={`https://wa.me/${(detailC.whatsapp||detailC.tel||"").replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" className="btn-wa">WhatsApp</a>
-            <a href={`tel:${detailC.tel}`} className="btn-primary">Appeler</a>
-            {detailC.type==="locataire" && detailC.bienId && (
-              <button onClick={()=>{
-                setEtatLieuxModal(detailC);
-                setEtatLieux({dateSortie:new Date().toISOString().split("T")[0],caution_rendue:false,observations:"",pieces:{salon:"",cuisine:"",chambre1:"",chambre2:"",sdb:"",wc:"",autres:""}});
-              }} style={{padding:"8px 16px",border:"1px solid #f59e0b",borderRadius:"8px",background:"#fffbeb",color:"#92400e",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>
-                🔑 Libérer le bien
-              </button>
-            )}
-            {detailC.type==="locataire" && (
-              <button onClick={()=>genererContratBail({
-                client: detailC,
-                bien: biens.find(b=>b.id===detailC.bienId),
-                contrat: null,
-              })} style={{padding:"8px 16px",border:"1px solid #5c1a2b",borderRadius:"8px",background:"#fdf8f5",color:"#5c1a2b",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>
-                📄 Contrat de bail
-              </button>
-            )}
-          </div>
-        </div>;
-      })()}
-    </Modal>
+            );
+          })}
+        </div>
+      )}
 
-    {/* Modal État des lieux de sortie */}
-    {etatLieuxModal && (
-      <Modal open title={`🔑 Libération du bien — ${etatLieuxModal.nom}`} onClose={()=>setEtatLieuxModal(null)} wide>
-        <div className="space-y-4">
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-            <strong>Bien loué :</strong> {biens.find(b=>b.id===etatLieuxModal.bienId)?.titre || "—"}<br/>
-            <strong>Locataire :</strong> {etatLieuxModal.nom} · Entrée le {etatLieuxModal.dateEntree || "—"}
-          </div>
+      {/* Modal Formulaire */}
+      {modal && (
+        <Modal open title={modal==="new"?`+ Nouveau client`:`Modifier — ${f.nom}`} onClose={()=>setModal(null)} wide>
+          <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Inp label="Date de sortie *" type="date" value={etatLieux.dateSortie}
-              onChange={e=>setEtatLieux(p=>({...p,dateSortie:e.target.value}))}/>
-            <div className="flex items-center gap-3 pt-6">
-              <input type="checkbox" id="caution" checked={etatLieux.caution_rendue}
-                onChange={e=>setEtatLieux(p=>({...p,caution_rendue:e.target.checked}))}
-                className="w-4 h-4 rounded"/>
-              <label htmlFor="caution" className="text-sm font-medium">
-                ✅ Caution remboursée ({fmt(etatLieuxModal.caution||0)} FCFA)
-              </label>
+            {/* Sélection des rôles */}
+            <div>
+              <div style={{fontSize:"12px",fontWeight:700,color:"var(--gray)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"8px"}}>Rôles du client (plusieurs possibles)</div>
+              <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+                {["locataire","acheteur","prospect"].map(role => {
+                  const cfg = TYPE_CONFIG[role];
+                  const active = hasRole(role);
+                  return (
+                    <button key={role} onClick={()=>toggleRole(role)} style={{
+                      padding:"8px 16px",border:`2px solid ${active?cfg.color:cfg.border}`,
+                      borderRadius:"10px",cursor:"pointer",
+                      background:active?cfg.bg:"white",
+                      fontWeight:active?700:500,fontSize:"13px",
+                      color:active?cfg.color:"var(--gray)",
+                      fontFamily:"Plus Jakarta Sans,sans-serif",
+                    }}>
+                      {active?"✓ ":""}{cfg.icon} {cfg.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {f.roles && f.roles.includes(",") && (
+                <div style={{marginTop:"6px",fontSize:"11px",color:"var(--gray)",fontStyle:"italic"}}>
+                  Ce client apparaîtra dans plusieurs onglets.
+                </div>
+              )}
+            </div>
+
+            {/* Infos communes */}
+            <div style={{borderTop:"1px solid var(--border)",paddingTop:"12px"}}>
+              <div style={{fontSize:"12px",fontWeight:700,color:"var(--gray)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"8px"}}>Informations personnelles</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}}>
+                <Inp label="Nom complet *" value={f.nom} onChange={e=>sf("nom",e.target.value)} placeholder="Kouamé Aya"/>
+                <Inp label="Téléphone" value={f.tel||""} onChange={e=>sf("tel",e.target.value)} placeholder="+225 07..."/>
+                <Inp label="WhatsApp" value={f.whatsapp||""} onChange={e=>sf("whatsapp",e.target.value)}/>
+                <Inp label="Email" value={f.email||""} onChange={e=>sf("email",e.target.value)}/>
+                <Inp label="Pièce d'identité (CNI)" value={f.piece_identite||""} onChange={e=>sf("piece_identite",e.target.value)} placeholder="CI-2024-..."/>
+                <Inp label="Profession" value={f.profession||""} onChange={e=>sf("profession",e.target.value)}/>
+                <Inp label="Employeur" value={f.employeur||""} onChange={e=>sf("employeur",e.target.value)}/>
+                <Inp label="Revenus mensuels (FCFA)" type="number" value={f.revenus||""} onChange={e=>sf("revenus",+e.target.value)}/>
+              </div>
+            </div>
+
+            {/* Section Locataire */}
+            {hasRole("locataire") && (
+              <div style={{borderTop:"1px solid #bfdbfe",paddingTop:"12px",background:"#f8fbff",borderRadius:"10px",padding:"14px"}}>
+                <div style={{fontSize:"12px",fontWeight:700,color:"#1d4ed8",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"10px"}}>🏠 Informations de location</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}}>
+                  <Sel label="Bien loué" value={f.bienId||""} onChange={e=>sf("bienId",+e.target.value||"")}>
+                    <option value="">— Aucun —</option>
+                    {BIENS_DISPO.map(b=><option key={b.id} value={b.id}>{b.titre} — {b.commune}</option>)}
+                  </Sel>
+                  <Inp label="Loyer mensuel (FCFA)" type="number" value={f.loyer||""} onChange={e=>sf("loyer",+e.target.value)}/>
+                  <Inp label="Caution (FCFA)" type="number" value={f.caution||""} onChange={e=>sf("caution",+e.target.value)}/>
+                  <Inp label="Date d'entrée" type="date" value={f.dateEntree||""} onChange={e=>sf("dateEntree",e.target.value)}/>
+                  <Inp label="Date de sortie" type="date" value={f.dateSortie||""} onChange={e=>sf("dateSortie",e.target.value)}/>
+                </div>
+                {f.loyer > 0 && f.revenus > 0 && (
+                  <div style={{marginTop:"10px",padding:"8px 12px",borderRadius:"8px",fontSize:"12px",background:f.revenus>=f.loyer*3?"#f0fdf4":"#fef2f2",color:f.revenus>=f.loyer*3?"#15803d":"#dc2626",border:`1px solid ${f.revenus>=f.loyer*3?"#bbf7d0":"#fecaca"}`}}>
+                    {f.revenus>=f.loyer*3?"✅ Solvable — revenus ≥ 3× loyer":"⚠️ Revenus insuffisants — doivent être ≥ 3× loyer"}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Section Acheteur */}
+            {hasRole("acheteur") && (
+              <div style={{borderTop:"1px solid #bbf7d0",paddingTop:"12px",background:"#f8fdf8",borderRadius:"10px",padding:"14px"}}>
+                <div style={{fontSize:"12px",fontWeight:700,color:"#15803d",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"10px"}}>💰 Informations d'achat</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}}>
+                  <Inp label="Budget maximum (FCFA)" type="number" value={f.budget||""} onChange={e=>sf("budget",+e.target.value)}/>
+                  <Sel label="Mode de financement" value={f.modeFinancement||"cash"} onChange={e=>sf("modeFinancement",e.target.value)}>
+                    <option value="cash">Cash</option>
+                    <option value="credit">Crédit bancaire</option>
+                    <option value="mixte">Mixte</option>
+                  </Sel>
+                  {(f.modeFinancement==="credit"||f.modeFinancement==="mixte") && (
+                    <Inp label="Banque" value={f.banque||""} onChange={e=>sf("banque",e.target.value)} placeholder="SGCI, Banque Atlantique..."/>
+                  )}
+                  <Inp label="Type de bien recherché" value={f.typeRecherche||""} onChange={e=>sf("typeRecherche",e.target.value)} placeholder="Villa 4 ch., terrain..."/>
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            <Txta label="Notes" rows={2} value={f.notes||""} onChange={e=>sf("notes",e.target.value)} placeholder="Informations complémentaires..."/>
+
+            <div style={{display:"flex",gap:"10px",justifyContent:"flex-end",borderTop:"1px solid var(--border)",paddingTop:"14px"}}>
+              <button onClick={()=>setModal(null)} style={{padding:"10px 20px",border:"1px solid var(--border)",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:600,background:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>Annuler</button>
+              <button onClick={save} style={{padding:"10px 20px",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,background:"var(--blue)",color:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+                {modal==="new"?"+ Ajouter le client":"Enregistrer"}
+              </button>
             </div>
           </div>
+        </Modal>
+      )}
 
-          <div>
-            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">État des pièces</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[["salon","Salon / Séjour"],["cuisine","Cuisine"],["chambre1","Chambre 1"],["chambre2","Chambre 2"],["sdb","Salle de bain"],["wc","WC"],["autres","Autres"]].map(([k,l])=>(
-                <div key={k}>
-                  <label className="text-xs font-semibold text-gray-500 block mb-1">{l}</label>
-                  <select value={etatLieux.pieces[k]} onChange={e=>setEtatLieux(p=>({...p,pieces:{...p.pieces,[k]:e.target.value}}))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+      {/* Fiche détail */}
+      {detailC && (
+        <Modal open title={`Fiche — ${detailC.nom}`} onClose={()=>setDetailC(null)} wide>
+          <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+            <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+              {getRoles(detailC).map(r=><BadgeType key={r} role={r}/>)}
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+              {[
+                ["Nom", detailC.nom],
+                ["Téléphone", detailC.tel||"—"],
+                ["WhatsApp", detailC.whatsapp||"—"],
+                ["Email", detailC.email||"—"],
+                ["CNI / Pièce d'identité", detailC.pieceIdentite||detailC.piece_identite||"—"],
+                ["Profession", detailC.profession||"—"],
+                ["Employeur", detailC.employeur||"—"],
+                ["Revenus", detailC.revenus ? fmt(detailC.revenus)+"/mois" : "—"],
+              ].map(([l,v])=>(
+                <div key={l} style={{background:"var(--off)",borderRadius:"8px",padding:"10px 14px"}}>
+                  <div style={{fontSize:"10px",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--gray)",marginBottom:"3px"}}>{l}</div>
+                  <div style={{fontSize:"13px",fontWeight:600,color:"var(--text)"}}>{v}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Infos locataire */}
+            {getRoles(detailC).includes("locataire") && (
+              <div style={{background:"#f8fbff",border:"1px solid #bfdbfe",borderRadius:"12px",padding:"14px"}}>
+                <div style={{fontSize:"12px",fontWeight:700,color:"#1d4ed8",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"10px"}}>🏠 Location</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+                  {[
+                    ["Bien loué", biens.find(b=>b.id===(detailC.bienId||detailC.bien_id))?.titre||"—"],
+                    ["Loyer", detailC.loyer?fmt(detailC.loyer)+"/mois":"—"],
+                    ["Caution", detailC.caution?fmt(detailC.caution):"—"],
+                    ["Date d'entrée", detailC.dateEntree||detailC.date_entree||"—"],
+                    ["Date de sortie", detailC.dateSortie||detailC.date_sortie||"—"],
+                  ].map(([l,v])=>(
+                    <div key={l} style={{background:"white",borderRadius:"8px",padding:"8px 12px"}}>
+                      <div style={{fontSize:"10px",fontWeight:700,textTransform:"uppercase",color:"#1d4ed8",marginBottom:"2px"}}>{l}</div>
+                      <div style={{fontSize:"13px",fontWeight:600}}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+                {detailC.loyer > 0 && detailC.revenus > 0 && (
+                  <div style={{marginTop:"10px",padding:"8px 12px",borderRadius:"8px",fontSize:"12px",background:detailC.revenus>=detailC.loyer*3?"#f0fdf4":"#fef2f2",color:detailC.revenus>=detailC.loyer*3?"#15803d":"#dc2626"}}>
+                    {detailC.revenus>=detailC.loyer*3?"✅ Solvable":"⚠️ Revenus insuffisants"}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Infos acheteur */}
+            {getRoles(detailC).includes("acheteur") && (
+              <div style={{background:"#f8fdf8",border:"1px solid #bbf7d0",borderRadius:"12px",padding:"14px"}}>
+                <div style={{fontSize:"12px",fontWeight:700,color:"#15803d",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"10px"}}>💰 Achat</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+                  {[
+                    ["Budget max", detailC.budget?fmt(detailC.budget):"—"],
+                    ["Financement", detailC.modeFinancement||"—"],
+                    ["Banque", detailC.banque||"—"],
+                    ["Recherche", detailC.typeRecherche||"—"],
+                  ].map(([l,v])=>(
+                    <div key={l} style={{background:"white",borderRadius:"8px",padding:"8px 12px"}}>
+                      <div style={{fontSize:"10px",fontWeight:700,textTransform:"uppercase",color:"#15803d",marginBottom:"2px"}}>{l}</div>
+                      <div style={{fontSize:"13px",fontWeight:600}}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {detailC.notes && <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:"8px",padding:"12px",fontSize:"13px",color:"#92400e"}}>{detailC.notes}</div>}
+
+            <div style={{display:"flex",gap:"8px",flexWrap:"wrap",borderTop:"1px solid var(--border)",paddingTop:"14px"}}>
+              <a href={`https://wa.me/${(detailC.whatsapp||detailC.tel||"").replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" className="btn-wa">WhatsApp</a>
+              <a href={`tel:${detailC.tel}`} className="btn-primary">Appeler</a>
+              {getRoles(detailC).includes("locataire") && (detailC.bienId||detailC.bien_id) && (
+                <button onClick={()=>{
+                  setEtatLieuxModal(detailC);
+                  setEtatLieux({dateSortie:new Date().toISOString().split("T")[0],caution_rendue:false,observations:"",pieces:{salon:"",cuisine:"",chambre1:"",chambre2:"",sdb:"",wc:"",autres:""}});
+                }} style={{padding:"8px 16px",border:"1px solid #f59e0b",borderRadius:"8px",background:"#fffbeb",color:"#92400e",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+                  🔑 Libérer le bien
+                </button>
+              )}
+              {getRoles(detailC).includes("locataire") && (
+                <button onClick={()=>genererContratBail({
+                  client:detailC,
+                  bien:biens.find(b=>b.id===(detailC.bienId||detailC.bien_id)),
+                  contrat:null,
+                })} style={{padding:"8px 16px",border:"1px solid #5c1a2b",borderRadius:"8px",background:"#fdf8f5",color:"#5c1a2b",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+                  📄 Contrat de bail
+                </button>
+              )}
+              {canWrite("clients") && (
+                <button onClick={()=>{openEdit(detailC);setDetailC(null);}} style={{padding:"8px 16px",border:"1px solid var(--border)",borderRadius:"8px",background:"white",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>✏️ Modifier</button>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal État des lieux */}
+      {etatLieuxModal && (
+        <Modal open title={`🔑 Libération du bien — ${etatLieuxModal.nom}`} onClose={()=>setEtatLieuxModal(null)} wide>
+          <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+            <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:"10px",padding:"12px",fontSize:"13px",color:"#92400e"}}>
+              <strong>Bien :</strong> {biens.find(b=>b.id===(etatLieuxModal.bienId||etatLieuxModal.bien_id))?.titre||"—"} · <strong>Locataire :</strong> {etatLieuxModal.nom}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}}>
+              <Inp label="Date de sortie *" type="date" value={etatLieux.dateSortie} onChange={e=>setEtatLieux(p=>({...p,dateSortie:e.target.value}))}/>
+              <div style={{display:"flex",alignItems:"center",gap:"8px",paddingTop:"24px"}}>
+                <input type="checkbox" id="caution_r" checked={etatLieux.caution_rendue} onChange={e=>setEtatLieux(p=>({...p,caution_rendue:e.target.checked}))}/>
+                <label htmlFor="caution_r" style={{fontSize:"13px",fontWeight:600}}>✅ Caution remboursée</label>
+              </div>
+            </div>
+            <div>
+              <div style={{fontSize:"12px",fontWeight:700,color:"var(--gray)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"8px"}}>État des pièces</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+                {[["salon","Salon"],["cuisine","Cuisine"],["chambre1","Chambre 1"],["chambre2","Chambre 2"],["sdb","Salle de bain"],["wc","WC"]].map(([k,l])=>(
+                  <Sel key={k} label={l} value={etatLieux.pieces[k]} onChange={e=>setEtatLieux(p=>({...p,pieces:{...p.pieces,[k]:e.target.value}}))}>
                     <option value="">— État —</option>
                     <option value="Bon état">✅ Bon état</option>
                     <option value="État correct">🟡 État correct</option>
                     <option value="À rénover">🔴 À rénover</option>
-                    <option value="Non applicable">N/A</option>
-                  </select>
-                </div>
-              ))}
+                    <option value="N/A">N/A</option>
+                  </Sel>
+                ))}
+              </div>
+            </div>
+            <Txta label="Observations" rows={2} value={etatLieux.observations} onChange={e=>setEtatLieux(p=>({...p,observations:e.target.value}))} placeholder="Dégradations, retenue sur caution..."/>
+            <div style={{display:"flex",gap:"10px",justifyContent:"flex-end",borderTop:"1px solid var(--border)",paddingTop:"14px"}}>
+              <button onClick={()=>setEtatLieuxModal(null)} style={{padding:"10px 20px",border:"1px solid var(--border)",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:600,background:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>Annuler</button>
+              <button onClick={()=>libererBien(etatLieuxModal,etatLieux)} style={{padding:"10px 20px",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,background:"#f59e0b",color:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>🔑 Confirmer</button>
             </div>
           </div>
-
-          <Txta label="Observations générales" rows={3} value={etatLieux.observations}
-            onChange={e=>setEtatLieux(p=>({...p,observations:e.target.value}))}
-            placeholder="Dégradations constatées, travaux nécessaires, retenue sur caution..."/>
-
-          <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
-            <Btn variant="outline" onClick={()=>setEtatLieuxModal(null)}>Annuler</Btn>
-            <Btn variant="primary" onClick={()=>libererBien(etatLieuxModal, etatLieux)}>
-              🔑 Confirmer la libération
-            </Btn>
-          </div>
-        </div>
-      </Modal>
-    )}
-
-    {/* Formulaire ajout/modif */}
-    <Modal open={!!modal} onClose={()=>setModal(null)} title={modal==="add"?"Nouveau client":`Modifier — ${modal?.nom||""}`} wide>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="col-span-2"><Inp label="Nom complet *" value={f.nom} onChange={e=>sf("nom",e.target.value)}/></div>
-        <Inp label="Email" value={f.email} onChange={e=>sf("email",e.target.value)}/>
-        <Inp label="Téléphone" value={f.tel} onChange={e=>sf("tel",e.target.value)}/>
-        <Inp label="WhatsApp (+225...)" value={f.whatsapp} onChange={e=>sf("whatsapp",e.target.value)} placeholder="+2250700000000"/>
-        <Sel label="Type" value={f.type} onChange={e=>sf("type",e.target.value)}><option value="locataire">Locataire</option><option value="prospect">Prospect</option><option value="acheteur">Acheteur</option><option value="proprietaire">Propriétaire</option></Sel>
-        <Sel label="Bien associé" value={f.bienId} onChange={e=>sf("bienId",e.target.value)}>
-          <option value="">— Aucun —</option>
-          {biens.filter(b=>!f.bienId||b.id===+f.bienId||b.statut==="disponible").map(b=>(
-            <option key={b.id} value={b.id}>{b.titre} {b.statut==="loue"?"(loué)":b.statut==="en_cours"?"(en cours)":""}</option>
-          ))}
-        </Sel>
-        <Inp label="Date d'entrée" type="date" value={f.dateEntree} onChange={e=>sf("dateEntree",e.target.value)}/>
-        <Inp label="Date de sortie" type="date" value={f.dateSortie} onChange={e=>sf("dateSortie",e.target.value)}/>
-        <Inp label="Caution (FCFA)" type="number" value={f.caution} onChange={e=>sf("caution",e.target.value)}/>
-        <Inp label="Loyer mensuel (FCFA)" type="number" value={f.loyer} onChange={e=>sf("loyer",e.target.value)}/>
-        <Inp label="Profession" value={f.profession} onChange={e=>sf("profession",e.target.value)} placeholder="Ingénieur, Directeur..."/>
-        <Inp label="Employeur" value={f.employeur} onChange={e=>sf("employeur",e.target.value)}/>
-        <Inp label="Revenus mensuels (FCFA)" type="number" value={f.revenus} onChange={e=>sf("revenus",e.target.value)}/>
-        <Inp label="Pièce d'identité" value={f.piece_identite} onChange={e=>sf("piece_identite",e.target.value)} placeholder="CNI n°... / Passeport..."/>
-        <div className="col-span-2"><Txta label="Notes" rows={2} value={f.notes} onChange={e=>sf("notes",e.target.value)}/></div>
-        <div className="col-span-2 flex justify-end gap-3 pt-2 border-t border-gray-100">
-          <Btn variant="outline" onClick={()=>setModal(null)}>Annuler</Btn>
-          <Btn variant="primary" onClick={save}>{modal==="add"?"Ajouter":"Enregistrer"}</Btn>
-        </div>
-      </div>
-    </Modal>
-  </div>;
+        </Modal>
+      )}
+    </div>
+  );
 }
 
-// ── LOYERS — sans pénalités ────────────────────────────────
+
 export function AdminLoyers() {
   const {loyers,clients,biens,payerLoyer,addLoyer,deleteLoyer,relancerLoyer,genererMoisLoyers,canWrite} = useCtx();
   const peutEcrire = canWrite("loyers");
