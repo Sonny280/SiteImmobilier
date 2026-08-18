@@ -74,6 +74,9 @@ router.post("/", auth, requireModule("loyers"), async (req, res) => {
       "INSERT INTO loyers(clientId,bienId,montant,mois,echeance,statut,notes) VALUES(?,?,?,?,?,?,?)"
     ).run(+clientId, +bienId, +montant, mois, echeance||null, "en_attente", notes||null);
 
+    // Mettre le bien en "loue" automatiquement
+    await prepare("UPDATE biens SET statut='loue' WHERE id=?").run(+bienId);
+
     const loyer = await prepare(BASE_SQL + " WHERE l.id=?").get(r.lastInsertRowid);
     res.status(201).json(await enrich(loyer));
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -106,6 +109,8 @@ router.post("/generer-mois", auth, requireModule("loyers"), async (req, res) => 
       await prepare(
         "INSERT INTO loyers(clientId,bienId,montant,mois,echeance,statut) VALUES(?,?,?,?,?,'en_attente')"
       ).run(c.id, c.bienId, c.loyer, mois, echeance);
+      // Mettre le bien en "loue"
+      await prepare("UPDATE biens SET statut='loue' WHERE id=?").run(c.bienId);
       crees++;
     }
     res.json({ crees, ignores, message: `${crees} loyer(s) créé(s), ${ignores} ignoré(s) (déjà existants)` });
