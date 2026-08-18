@@ -350,22 +350,7 @@ function BadgeType({type}) {
 
 // AdminClients v3 — multi-rôles (locataire + acheteur + prospect)
 
-const TYPE_CONFIG = {
-  locataire: { label:"Locataire", icon:"🏠", color:"#1d4ed8", bg:"#eff6ff", border:"#bfdbfe" },
-  acheteur:  { label:"Acheteur",  icon:"💰", color:"#15803d", bg:"#f0fdf4", border:"#bbf7d0" },
-  prospect:  { label:"Prospect",  icon:"👤", color:"#92400e", bg:"#fffbeb", border:"#fde68a" },
-};
 
-function BadgeType({role}) {
-  const c = TYPE_CONFIG[role] || TYPE_CONFIG.prospect;
-  return (
-    <span style={{
-      display:"inline-flex",alignItems:"center",gap:"4px",
-      padding:"3px 10px",borderRadius:"20px",fontSize:"11px",fontWeight:700,
-      background:c.bg,color:c.color,border:`1px solid ${c.border}`
-    }}>{c.icon} {c.label}</span>
-  );
-}
 
 function getRoles(c) {
   if (!c.roles) return [c.type || "prospect"];
