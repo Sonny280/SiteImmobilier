@@ -442,7 +442,7 @@ export function AdminClients() {
               <button onClick={()=>genererContratBail({
                 client: detailC,
                 bien: biens.find(b=>b.id===detailC.bienId),
-                contrat: contrats.find(c=>c.clientId===detailC.id),
+             contrat: null,
               })} style={{padding:"8px 16px",border:"1px solid #5c1a2b",borderRadius:"8px",background:"#fdf8f5",color:"#5c1a2b",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>
                 📄 Contrat de bail
               </button>
