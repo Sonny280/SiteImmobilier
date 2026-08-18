@@ -17,7 +17,9 @@ const Btn=({children,variant="primary",size="md",className="",...p})=>{
 // ── DASHBOARD ─────────────────────────────────────────────────
 export function AdminDashboard() {
   const {biens,clients,loyers,ventes,demandes,contrats,online} = useCtx();
-  const [stats,setStats] = useState(null);
+  const [stats, setStats] = useState(null);
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
 
   useEffect(() => {
     if (!online) return;
@@ -27,148 +29,270 @@ export function AdminDashboard() {
       .then(r=>r.json()).then(setStats).catch(()=>{});
   }, [online]);
 
-  // Fallback calculs locaux si backend pas dispo
   const mois  = new Date().toISOString().slice(0,7);
   const today = new Date().toISOString().split("T")[0];
   const lm    = loyers.filter(l=>l.mois===mois);
-  const paye  = stats?.loyersMois  ?? lm.reduce((s,l)=>s+(l.statut==="paye"?l.montant:0),0);
-  const att   = stats?.loyersAttend?? lm.reduce((s,l)=>s+l.montant,0);
-  const retards = stats?.retards   ?? loyers.filter(l=>l.statut!=="paye"&&(l.joursRetard||0)>0);
-  const nbRetards = stats?.nbRetards ?? retards.length;
-  const montRetards = stats?.montRetards ?? retards.reduce((s,l)=>s+l.montant,0);
-  const ventesAct = stats?.ventesEncours ?? ventes.filter(v=>!["finalisee","annulee"].includes(v.statut)).length;
-  const caVentes  = stats?.caVentes  ?? ventes.filter(v=>v.statut==="finalisee").reduce((s,v)=>s+(v.prixFinal||0),0);
-  const commissions = stats?.commissions ?? ventes.filter(v=>v.statut==="finalisee").reduce((s,v)=>s+(v.commission||0),0);
-  const tauxOcc   = stats?.tauxOccup ?? (biens.length>0?Math.round((biens.filter(b=>b.statut==="loue").length/biens.length)*100):0);
-  const dNew      = stats?.demandesNouv ?? demandes.filter(d=>d.statut==="nouveau").length;
+
+  const paye        = stats?.loyersMois   ?? lm.reduce((s,l)=>s+(l.statut==="paye"?l.montantRecu||l.montant:0),0);
+  const att         = stats?.loyersAttend ?? lm.reduce((s,l)=>s+l.montant,0);
+  const nbRetards   = stats?.nbRetards    ?? loyers.filter(l=>l.statut!=="paye"&&(l.joursRetard||0)>0).length;
+  const montRetards = stats?.montRetards  ?? loyers.filter(l=>l.statut!=="paye"&&(l.joursRetard||0)>0).reduce((s,l)=>s+l.montant,0);
+  const ventesAct   = stats?.ventesEncours?? ventes.filter(v=>!["finalisee","annulee"].includes(v.statut)).length;
+  const caVentes    = stats?.caVentes     ?? ventes.filter(v=>v.statut==="finalisee").reduce((s,v)=>s+(v.prixFinal||0),0);
+  const commissions = stats?.commissions  ?? ventes.filter(v=>v.statut==="finalisee").reduce((s,v)=>s+(v.commission||0),0);
+  const tauxOcc     = stats?.tauxOccup    ?? (biens.length>0?Math.round((biens.filter(b=>b.statut==="loue").length/biens.length)*100):0);
+  const dNew        = stats?.demandesNouv ?? demandes.filter(d=>d.statut==="nouveau").length;
   const contratsExpir = stats?.contratsExpir ?? 0;
   const contratsAlerte = stats?.contratsAlerte ?? [];
+  const retards     = stats?.retards ?? loyers.filter(l=>l.statut!=="paye"&&(l.joursRetard||0)>0).slice(0,5);
+  const pipeline    = stats?.pipeline ?? [];
+  const loyers12    = stats?.loyers12 ?? [];
 
-  // Graphique loyers
-  const loyers12 = stats?.loyers12 ?? [];
-  const chartData = loyers12.length>0 ? loyers12 : [
-    {mois:"2024-10",total:530000},{mois:"2024-11",total:530000},{mois:"2024-12",total:530000},
-    {mois:"2025-01",total:530000},{mois:"2025-02",total:530000},{mois:"2025-03",total:530000},
-    {mois:"2025-04",total:530000},{mois:"2025-05",total:530000},
-  ];
-  const maxL = Math.max(...chartData.map(l=>l.total),1);
+  // Graphique Chart.js
+  useEffect(() => {
+    if (!chartRef.current || loyers12.length === 0) return;
+    const Script = document.createElement("script");
+    Script.src = "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js";
+    Script.onload = () => {
+      if (chartInstance.current) chartInstance.current.destroy();
+      const labels = loyers12.map(l => {
+        const [y, m] = l.mois.split("-");
+        const moisNoms = ["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+        return `${moisNoms[+m]} ${y.slice(2)}`;
+      });
+      const data = loyers12.map(l => l.total || 0);
+      chartInstance.current = new window.Chart(chartRef.current, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            label: "Loyers encaissés",
+            data,
+            backgroundColor: "rgba(92,26,43,0.8)",
+            borderRadius: 6,
+            borderSkipped: false,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: v => new Intl.NumberFormat("fr-CI",{notation:"compact"}).format(v) + " F",
+                font: { size: 11 },
+              },
+              grid: { color: "rgba(0,0,0,0.05)" }
+            },
+            x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+          }
+        }
+      });
+    };
+    if (!window.Chart) document.head.appendChild(Script);
+    else Script.onload();
+    return () => { if (chartInstance.current) chartInstance.current.destroy(); };
+  }, [loyers12]);
 
-  // Pipeline ventes
-  const pipeline = stats?.pipeline ?? ETAPES_VENTE.map(e=>({ statut:e, nb:ventes.filter(v=>v.statut===e).length }));
-
-  const retardsDisplay = Array.isArray(retards) ? retards : [];
-
-  return <div className="space-y-6">
-    {/* KPI */}
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      <KpiCard label="Biens gérés"       value={biens.length}            sub={`${biens.filter(b=>b.statut==="disponible").length} disponibles`} pos icon="🏢" accent="emerald"/>
-      <KpiCard label={`Loyers ${mois}`}  value={`${fmtM(paye)} F`}       sub={`/ ${fmtM(att)} attendus`} pos={paye>=att}    icon="💰" accent="amber"/>
-      <KpiCard label="Loyers en retard"  value={nbRetards}               sub={nbRetards>0?`${fmtM(montRetards)} F en attente`:"✓ Tous à jour"} pos={nbRetards===0} icon="⏰" accent={nbRetards>0?"red":"emerald"}/>
-      <KpiCard label="Ventes actives"    value={ventesAct}               sub={`CA finalisé : ${fmtM(caVentes)} F`} pos icon="🏡" accent="orange"/>
-      <KpiCard label="Taux occupation"   value={`${tauxOcc}%`}           sub={tauxOcc>=80?"Excellent":"À améliorer"} pos={tauxOcc>=80} icon="📊" accent="blue"/>
-      <KpiCard label="Clients"           value={clients.length}          sub={`${clients.filter(c=>c.type==="locataire").length} locataires`} pos icon="👥" accent="purple"/>
-      <KpiCard label="Demandes"          value={dNew}                    sub={dNew>0?"À traiter":"✓ À jour"} pos={dNew===0} icon="📬" accent={dNew>0?"blue":"emerald"}/>
-      <KpiCard label="Commissions"       value={`${fmtM(commissions)} F`} sub="Ventes finalisées" pos icon="💎" accent="emerald"/>
+  const KPI = ({label, value, sub, color="#5c1a2b", icon}) => (
+    <div style={{background:"white",border:"1px solid var(--border)",borderRadius:"14px",padding:"20px",borderTop:`3px solid ${color}`}}>
+      <div style={{fontSize:"11px",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color:"var(--gray)",marginBottom:"8px"}}>{icon} {label}</div>
+      <div style={{fontSize:"26px",fontWeight:900,color,fontFamily:"Playfair Display,serif",marginBottom:"3px"}}>{value}</div>
+      {sub && <div style={{fontSize:"12px",color:"var(--gray)"}}>{sub}</div>}
     </div>
+  );
 
-    {/* Alerte retards */}
-    {retardsDisplay.length>0&&<div className="bg-red-50 border border-red-200 rounded-2xl p-5">
-      <h3 className="font-bold text-red-800 mb-3">⏰ Loyers en retard — {retardsDisplay.length} locataire{retardsDisplay.length>1?"s":""}</h3>
-      <div className="space-y-2">{retardsDisplay.map((l,i)=>(
-        <div key={l.id||i} className="bg-white rounded-xl px-4 py-3 flex items-center justify-between flex-wrap gap-3 border border-red-100">
-          <div><span className="font-semibold text-gray-900">{l.clientNom}</span><span className="text-gray-400 mx-2">·</span><span className="text-sm text-gray-500">{l.bienTitre}</span><span className="text-gray-400 mx-2">·</span><span className="text-sm font-bold text-gray-800">{l.mois}</span></div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-red-600 text-sm">{fmt(l.montant)} FCFA</span>
-            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">{l.joursRetard}j de retard</span>
-            {(l.whatsapp||l.clientTel)&&<a href={`${wa(l.whatsapp||l.clientTel)}?text=${encodeURIComponent(`Bonjour ${l.clientNom}, votre loyer de ${fmt(l.montant)} FCFA (${l.mois}) est en attente. Merci de régulariser. — ImmobilierCI`)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#25D366] text-white">💬 Relancer</a>}
-          </div>
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"24px"}}>
+
+      {/* Alertes */}
+      {(nbRetards > 0 || contratsExpir > 0 || dNew > 0) && (
+        <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+          {nbRetards > 0 && (
+            <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"12px",padding:"12px 18px",display:"flex",alignItems:"center",gap:"12px"}}>
+              <span style={{fontSize:"20px"}}>⚠️</span>
+              <div style={{flex:1}}>
+                <strong style={{color:"#dc2626"}}>{nbRetards} loyer{nbRetards>1?"s":""} en retard</strong>
+                <span style={{color:"#ef4444",fontSize:"13px"}}> — {fmt(montRetards)} FCFA à recouvrer</span>
+              </div>
+            </div>
+          )}
+          {contratsExpir > 0 && (
+            <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:"12px",padding:"12px 18px",display:"flex",alignItems:"center",gap:"12px"}}>
+              <span style={{fontSize:"20px"}}>📋</span>
+              <div style={{flex:1}}>
+                <strong style={{color:"#92400e"}}>{contratsExpir} contrat{contratsExpir>1?"s":""} expirent dans 60 jours</strong>
+                <span style={{color:"#b45309",fontSize:"13px"}}> — Pensez aux renouvellements</span>
+              </div>
+            </div>
+          )}
+          {dNew > 0 && (
+            <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:"12px",padding:"12px 18px",display:"flex",alignItems:"center",gap:"12px"}}>
+              <span style={{fontSize:"20px"}}>📬</span>
+              <div style={{flex:1}}>
+                <strong style={{color:"#1d4ed8"}}>{dNew} nouvelle{dNew>1?"s":""} demande{dNew>1?"s":""}</strong>
+                <span style={{color:"#2563eb",fontSize:"13px"}}> — À traiter sous 24h</span>
+              </div>
+            </div>
+          )}
         </div>
-      ))}</div>
-    </div>}
+      )}
 
-    {/* Alerte contrats expirant */}
-    {contratsAlerte.length>0&&<div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-      <h3 className="font-bold text-amber-800 mb-3">📄 Contrats expirant dans 60 jours ({contratsAlerte.length})</h3>
-      <div className="space-y-2">{contratsAlerte.map((c,i)=>(
-        <div key={c.id||i} className="bg-white rounded-xl px-4 py-3 flex items-center justify-between flex-wrap gap-3 border border-amber-100">
-          <div><span className="font-semibold text-gray-900">{c.clientNom}</span><span className="text-gray-400 mx-2">·</span><span className="text-sm text-gray-500">{c.bienTitre}</span></div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">Expire le {c.dateFin}</span>
-            <span className="text-sm font-bold text-gray-700">{fmt(c.loyer)} F/mois</span>
-          </div>
+      {/* KPIs Loyers */}
+      <div>
+        <div style={{fontSize:"12px",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color:"var(--gray)",marginBottom:"12px"}}>💰 Loyers — {mois}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"12px"}}>
+          <KPI label="Encaissés" value={fmtM(paye)} sub={`/ ${fmtM(att)} attendus`} color="#15803d" icon="✅"/>
+          <KPI label="En retard" value={nbRetards} sub={nbRetards>0?`${fmt(montRetards)} FCFA`:"Aucun retard"} color={nbRetards>0?"#dc2626":"#15803d"} icon="⏰"/>
+          <KPI label="Taux occupation" value={`${tauxOcc}%`} sub={`${biens.filter(b=>b.statut==="loue").length} biens loués`} color="#1d4ed8" icon="🏠"/>
+          <KPI label="Biens disponibles" value={biens.filter(b=>b.statut==="disponible").length} sub="à louer / vendre" color="#b8923f" icon="🔑"/>
         </div>
-      ))}</div>
-    </div>}
-
-    <div className="grid lg:grid-cols-3 gap-6">
-      {/* Tableau biens */}
-      <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 font-semibold text-sm text-gray-900">Biens récents</div>
-        <div className="overflow-x-auto"><table className="w-full min-w-[440px]">
-          <thead><tr className="bg-gray-50 border-b border-gray-100">{["Bien","Type","Prix","Statut"].map(h=><th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">{h}</th>)}</tr></thead>
-          <tbody>{biens.slice(0,6).map(b=>(
-            <tr key={b.id} className="border-b border-gray-50 hover:bg-gray-50">
-              <td className="px-5 py-3"><div className="flex items-center gap-3"><span className="text-lg">{b.emoji}</span><span className="text-sm font-medium text-gray-900 max-w-[150px] truncate">{b.titre}</span></div></td>
-              <td className="px-5 py-3"><Badge label={TL[b.type]} color="bg-blue-50 text-blue-700 border-blue-200"/></td>
-              <td className="px-5 py-3 text-sm font-bold text-gray-900 whitespace-nowrap">{fmtM(b.prix)} F</td>
-              <td className="px-5 py-3"><Badge label={SL[b.statut]||b.statut} color={SC[b.statut]||""}/></td>
-            </tr>
-          ))}</tbody>
-        </table></div>
       </div>
 
-      <div className="flex flex-col gap-4">
-        {/* Graphique */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Loyers encaissés</h3>
-          <div className="flex items-end gap-1 h-20 mb-2">
-            {chartData.map((l,i)=>(
-              <div key={i} className="flex-1 flex flex-col items-stretch">
-                <div className="w-full rounded-t" title={`${l.mois}: ${fmt(l.total)} F`} style={{height:`${Math.max((l.total/maxL)*100,2)}%`,background:i===chartData.length-1?"#059669":"#d1fae5",minHeight:l.total>0?4:2,transition:"height .3s"}}/>
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between text-xs text-gray-400">{chartData.map(l=><span key={l.mois}>{l.mois.slice(5)}</span>)}</div>
+      {/* KPIs Ventes */}
+      <div>
+        <div style={{fontSize:"12px",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",color:"var(--gray)",marginBottom:"12px"}}>🏡 Ventes</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"12px"}}>
+          <KPI label="En cours" value={ventesAct} sub="transactions actives" color="#92400e" icon="📝"/>
+          <KPI label="CA ventes" value={fmtM(caVentes)} sub="ventes finalisées" color="#5c1a2b" icon="💎"/>
+          <KPI label="Commissions" value={fmtM(commissions)} sub="générées" color="#b8923f" icon="💰"/>
+          <KPI label="Demandes" value={dNew} sub="nouvelles à traiter" color={dNew>0?"#dc2626":"#15803d"} icon="📬"/>
+        </div>
+      </div>
+
+      {/* Graphique + Retards */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"16px"}}>
+
+        {/* Graphique loyers 12 mois */}
+        <div style={{background:"white",border:"1px solid var(--border)",borderRadius:"14px",padding:"20px"}}>
+          <div style={{fontSize:"13px",fontWeight:700,color:"var(--text)",marginBottom:"16px"}}>📊 Loyers encaissés — 12 derniers mois</div>
+          {loyers12.length > 0 ? (
+            <div style={{height:"200px",position:"relative"}}>
+              <canvas ref={chartRef}/>
+            </div>
+          ) : (
+            <div style={{height:"200px",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--gray)",fontSize:"13px"}}>
+              Aucune donnée disponible
+            </div>
+          )}
+        </div>
+
+        {/* Loyers en retard */}
+        <div style={{background:"white",border:"1px solid var(--border)",borderRadius:"14px",padding:"20px"}}>
+          <div style={{fontSize:"13px",fontWeight:700,color:"var(--text)",marginBottom:"16px"}}>⏰ Loyers en retard</div>
+          {retards.length === 0 ? (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"160px",gap:"8px"}}>
+              <span style={{fontSize:"32px"}}>✅</span>
+              <span style={{fontSize:"13px",color:"var(--gray)"}}>Aucun retard de paiement</span>
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:"8px",maxHeight:"200px",overflowY:"auto"}}>
+              {retards.map((l,i) => (
+                <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 12px",background:"#fef2f2",borderRadius:"8px",border:"1px solid #fecaca"}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:"12px",fontWeight:700,color:"#dc2626",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.clientNom||"—"}</div>
+                    <div style={{fontSize:"11px",color:"var(--gray)"}}>{l.mois} · {fmt(l.montant)}</div>
+                  </div>
+                  <div style={{fontSize:"11px",fontWeight:700,color:"#dc2626",flexShrink:0}}>{l.joursRetard}j</div>
+                  {(l.clientWa||l.clientTel) && (
+                    <a href={`https://wa.me/${(l.clientWa||l.clientTel).replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer"
+                      style={{fontSize:"11px",padding:"4px 8px",background:"#25D366",color:"white",borderRadius:"5px",textDecoration:"none",flexShrink:0}}>
+                      WA
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Contrats qui expirent + Pipeline ventes */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"16px"}}>
+
+        {/* Contrats expirant */}
+        <div style={{background:"white",border:"1px solid var(--border)",borderRadius:"14px",padding:"20px"}}>
+          <div style={{fontSize:"13px",fontWeight:700,color:"var(--text)",marginBottom:"16px"}}>📋 Contrats expirant bientôt</div>
+          {contratsAlerte.length === 0 ? (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"120px",gap:"8px"}}>
+              <span style={{fontSize:"32px"}}>✅</span>
+              <span style={{fontSize:"13px",color:"var(--gray)"}}>Aucun contrat à renouveler</span>
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+              {contratsAlerte.map((c,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#fffbeb",borderRadius:"8px",border:"1px solid #fde68a"}}>
+                  <div>
+                    <div style={{fontSize:"12px",fontWeight:700,color:"#92400e"}}>{c.clientNom||"—"}</div>
+                    <div style={{fontSize:"11px",color:"var(--gray)"}}>{c.bienTitre||"—"}</div>
+                  </div>
+                  <div style={{fontSize:"11px",fontWeight:700,color:"#b45309"}}>{c.dateFin||"—"}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Pipeline ventes */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Pipeline ventes</h3>
-          {ETAPES_VENTE.map(e=>{
-            const n = (pipeline||[]).find(p=>p.statut===e)?.nb ?? ventes.filter(v=>v.statut===e).length;
-            return <div key={e} className="flex items-center gap-3 mb-2">
-              <div className="text-xs text-gray-500 w-24 truncate">{SL[e]||e}</div>
-              <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-emerald-500 rounded-full" style={{width:`${ventes.length>0?(n/Math.max(ventes.length,1))*100:0}%`}}/></div>
-              <div className="text-xs font-bold text-gray-700 w-3">{n}</div>
-            </div>;
-          })}
+        <div style={{background:"white",border:"1px solid var(--border)",borderRadius:"14px",padding:"20px"}}>
+          <div style={{fontSize:"13px",fontWeight:700,color:"var(--text)",marginBottom:"16px"}}>🏡 Pipeline ventes</div>
+          {pipeline.length === 0 ? (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"120px",gap:"8px"}}>
+              <span style={{fontSize:"32px"}}>📝</span>
+              <span style={{fontSize:"13px",color:"var(--gray)"}}>Aucune vente en cours</span>
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+              {pipeline.map((p,i)=>{
+                const etape = TL[p.statut] || p.statut;
+                const colors = {prospect:"#6b7280",offre:"#b8923f",compromis:"#1d4ed8",acte:"#7c3aed",finalisee:"#15803d"};
+                const color = colors[p.statut] || "#6b7280";
+                return (
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"var(--off)",borderRadius:"8px"}}>
+                    <span style={{fontSize:"12px",fontWeight:700,color,padding:"3px 10px",background:`${color}15`,borderRadius:"20px",border:`1px solid ${color}30`}}>{etape}</span>
+                    <span style={{fontSize:"13px",fontWeight:700,color:"var(--text)"}}>{p.nb}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
-    </div>
 
-    {/* Demandes récentes */}
-    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-900">Demandes récentes</h3>
-        {dNew>0&&<Badge label={`${dNew} nouveau${dNew>1?"x":""}`} color="bg-blue-100 text-blue-700 border-blue-200"/>}
-      </div>
-      <div className="divide-y divide-gray-50">{demandes.slice(0,5).map(d=>(
-        <div key={d.id} className="flex items-center justify-between px-6 py-4 hover:bg-gray-50">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-sm font-bold text-emerald-700 flex-shrink-0">{(d.nom||"?").slice(0,2)}</div>
-            <div><div className="text-sm font-medium text-gray-900">{d.nom}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{d.interet} · {(d.message||"").slice(0,60)}</div></div>
+      {/* Activité récente */}
+      <div style={{background:"white",border:"1px solid var(--border)",borderRadius:"14px",padding:"20px"}}>
+        <div style={{fontSize:"13px",fontWeight:700,color:"var(--text)",marginBottom:"16px"}}>🕐 Activité récente</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:"12px"}}>
+          <div style={{padding:"14px",background:"var(--off)",borderRadius:"10px"}}>
+            <div style={{fontSize:"11px",color:"var(--gray)",marginBottom:"4px"}}>CLIENTS TOTAL</div>
+            <div style={{fontSize:"22px",fontWeight:900,color:"var(--blue)"}}>{clients.length}</div>
+            <div style={{fontSize:"11px",color:"var(--gray)"}}>{clients.filter(c=>(c.roles||c.type||"").includes("locataire")).length} locataires · {clients.filter(c=>(c.roles||c.type||"").includes("acheteur")).length} acheteurs</div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Badge label={SL[d.statut]||d.statut} color={SC[d.statut]||""}/>
-            <span className="text-xs text-gray-400">{new Date(d.createdAt).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</span>
+          <div style={{padding:"14px",background:"var(--off)",borderRadius:"10px"}}>
+            <div style={{fontSize:"11px",color:"var(--gray)",marginBottom:"4px"}}>BIENS TOTAL</div>
+            <div style={{fontSize:"22px",fontWeight:900,color:"var(--blue)"}}>{biens.length}</div>
+            <div style={{fontSize:"11px",color:"var(--gray)"}}>{biens.filter(b=>b.statut==="disponible").length} dispo · {biens.filter(b=>b.statut==="loue").length} loués · {biens.filter(b=>b.statut==="vendu").length} vendus</div>
+          </div>
+          <div style={{padding:"14px",background:"var(--off)",borderRadius:"10px"}}>
+            <div style={{fontSize:"11px",color:"var(--gray)",marginBottom:"4px"}}>LOYERS CE MOIS</div>
+            <div style={{fontSize:"22px",fontWeight:900,color:"#15803d"}}>{lm.filter(l=>l.statut==="paye").length}/{lm.length}</div>
+            <div style={{fontSize:"11px",color:"var(--gray)"}}>payés sur {lm.length} générés</div>
+          </div>
+          <div style={{padding:"14px",background:"var(--off)",borderRadius:"10px"}}>
+            <div style={{fontSize:"11px",color:"var(--gray)",marginBottom:"4px"}}>VENTES FINALISÉES</div>
+            <div style={{fontSize:"22px",fontWeight:900,color:"#5c1a2b"}}>{ventes.filter(v=>v.statut==="finalisee").length}</div>
+            <div style={{fontSize:"11px",color:"var(--gray)"}}>{ventesAct} en cours</div>
           </div>
         </div>
-      ))}</div>
+      </div>
+
     </div>
-  </div>;
+  );
 }
 
-// ── BIENS ─────────────────────────────────────────────────────
+
 export function AdminBiens() {
   const {biens,addBien,updateBien,deleteBien,uploadPhotos,deletePhoto,canWrite} = useCtx();
   const peutEcrire = canWrite("biens");
