@@ -63,6 +63,10 @@ router.post("/", auth, requireModule("clients"), async (req, res) => {
     INSERT INTO clients (nom,email,tel,whatsapp,type,bienId,dateEntree,dateSortie,caution,loyer,profession,employeur,revenus,piece_identite,notes)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(nom, email||null, tel||null, whatsapp||null, type||"locataire", bienId||null, dateEntree||null, dateSortie||null, +caution||0, +loyer||0, profession||null, employeur||null, +revenus||null, piece_identite||null, notes||null);
+  // Si locataire avec bien → passer le bien en loue
+  if (bienId && type === "locataire") {
+    await prepare("UPDATE biens SET statut='loue' WHERE id=?").run(+bienId);
+  }
   // Si locataire avec bien → passer le bien en "loué"
   if ((type||"locataire")==="locataire" && bienId) {
     syncBienStatut(null, +bienId);
@@ -82,6 +86,17 @@ router.put("/:id", auth, requireModule("clients"), async (req, res) => {
     UPDATE clients SET nom=?,email=?,tel=?,whatsapp=?,type=?,bienId=?,dateEntree=?,dateSortie=?,caution=?,loyer=?,profession=?,employeur=?,revenus=?,piece_identite=?,notes=?
     WHERE id=?
   `).run(nom, email||null, tel||null, whatsapp||null, type||"locataire", bienId||null, dateEntree||null, dateSortie||null, +caution||0, +loyer||0, profession||null, employeur||null, +revenus||null, piece_identite||null, notes||null, id);
+  // Si locataire avec bien → passer le bien en loue
+  if (bienId && type === "locataire") {
+    await prepare("UPDATE biens SET statut='loue' WHERE id=?").run(+bienId);
+  }
+  // Si bien retiré (bienId null) → repasser en disponible
+  if (!bienId) {
+    const ancien = await prepare("SELECT bienId FROM clients WHERE id=?").get(+id);
+    if (ancien?.bienId) {
+      await prepare("UPDATE biens SET statut='disponible' WHERE id=? AND NOT EXISTS (SELECT 1 FROM clients WHERE bienId=? AND id!=? AND type='locataire')").run(ancien.bienId, ancien.bienId, +id);
+    }
+  }
 
   // Sync statut bien si locataire
   if ((type||"locataire")==="locataire") {
@@ -105,3 +120,5 @@ router.delete("/:id", auth, requireModule("clients"), async (req, res) => {
 });
 
 module.exports = router;
+
+
