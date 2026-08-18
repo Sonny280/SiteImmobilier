@@ -126,7 +126,14 @@ export function Provider({ children }) {
     } catch(e){ showToast(e.message,"warn"); }
   },[api,online,showToast]);
 
-  useEffect(()=>{ if(page==="admin") loadAdmin(); },[page]);
+  // Charger les données admin dès le login ET quand on va sur l'onglet admin
+  useEffect(()=>{
+    if(user) loadAdmin();
+  },[user?.id]); // user?.id évite la boucle infinie
+
+  useEffect(()=>{
+    if(page==="admin" && user) loadAdmin();
+  },[page]);
 
   const login = async(email,pwd)=>{
     const headers = {"Content-Type":"application/json"};
@@ -219,4 +226,3 @@ export function Provider({ children }) {
     </Ctx.Provider>
   );
 }
-
