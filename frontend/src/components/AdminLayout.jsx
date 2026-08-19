@@ -4,11 +4,7 @@ import { useCtx } from "../context.jsx";
 import { AG } from "../utils.js";
 import { AdminDashboard, AdminBiens, AdminClients, AdminLoyers, AdminVentes, AdminDemandes, AdminVisites, AdminParams, NotifyProvider } from "../admin.jsx";
 import { AdminBlog } from "../AdminBlog.jsx";
-import { AdminTemoignages } from "../AdminTemoignages.jsx";
-import { AdminRealisations } from "../AdminRealisations.jsx";
-import { AdminUsers, AdminMonProfil } from "../AdminUsers.jsx";
 
-const DESKTOP = 768;
 
 // ── Onglets regroupés en sections ────────────────────────────────
 // Réduction de 14 → 10 onglets visibles en condensant "Site vitrine"
