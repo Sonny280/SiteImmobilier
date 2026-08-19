@@ -108,11 +108,11 @@ function AdminLayout(){
     setShowRes(res.length > 0);
   };
   const [mob,     setMob]     = useState(false);
-  const [isMobile,setIsMobile]= useState(window.innerWidth < DESKTOP);
+  const [isMobile,setIsMobile]= useState(window.innerWidth < 768);
 
   useEffect(()=>{
     const onResize = () => {
-      const mobile = window.innerWidth < DESKTOP;
+      const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
       if(!mobile) setMob(false);
     };
@@ -433,4 +433,3 @@ function AdminLayout(){
 }
 
 export default AdminLayout;
-
