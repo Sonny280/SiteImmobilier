@@ -428,6 +428,7 @@ function AdminLayout(){
         </div>
       </div>
     )}
+    </>
   );
 }
 
