@@ -432,9 +432,3 @@ function AdminLayout(){
 }
 
 export default AdminLayout;
-
-// ── PAGE CALCULATRICE (proxy) ────────────────────────────────────
-export function AdminCalculatrice({ biens, setPage }) {
-const { Calculatrice } = require("../Calculatrice.jsx");
-  return <Calculatrice biens={biens} setPage={setPage}/>;
-}
