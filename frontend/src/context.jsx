@@ -126,14 +126,7 @@ export function Provider({ children }) {
     } catch(e){ showToast(e.message,"warn"); }
   },[api,online,showToast]);
 
-  // Charger les données admin dès le login ET quand on va sur l'onglet admin
-  useEffect(()=>{
-    if(user) loadAdmin();
-  },[user?.id]); // user?.id évite la boucle infinie
-
-  useEffect(()=>{
-    if(page==="admin" && user) loadAdmin();
-  },[page]);
+  useEffect(()=>{ if(page==="admin") loadAdmin(); },[page]);
 
   const login = async(email,pwd)=>{
     const headers = {"Content-Type":"application/json"};
@@ -205,7 +198,7 @@ export function Provider({ children }) {
   const value = {
     page,goTo,bienId,user,login,logout,online,
     canWrite:(moduleName)=>canWrite(user?.role,moduleName),
-    biens,clients,loyers,ventes,demandes,contrats,visites,showToast,
+    biens,clients,loyers,ventes,demandes,contrats,visites,showToast,authLoading,
     addBien,updateBien,deleteBien,uploadPhotos,deletePhoto,
     addClient,updateClient,deleteClient,
     addLoyer,payerLoyer,relancerLoyer,genererMoisLoyers,deleteLoyer,
@@ -226,3 +219,4 @@ export function Provider({ children }) {
     </Ctx.Provider>
   );
 }
+

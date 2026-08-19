@@ -77,7 +77,16 @@ function Root() {
 
   // Pages admin/auth — sans navbar/footer public
   if (page === "login")  return <LoginPage />;
-  if (page === "admin")  return user ? <AdminLayout /> : <LoginPage />;
+  if (page === "admin") {
+    if (authLoading) return (
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",flexDirection:"column",gap:"16px",background:"var(--off)"}}>
+        <div style={{width:"40px",height:"40px",border:"4px solid var(--blueL)",borderTop:"4px solid var(--blue)",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        <p style={{color:"var(--gray)",fontSize:"14px"}}>Vérification de la session...</p>
+      </div>
+    );
+    return user ? <AdminLayout /> : <LoginPage />;
+  }
 
   // Parser le type de page depuis l'état (synchronisé avec l'URL)
   const isBien = page.startsWith("bien-");
@@ -113,3 +122,4 @@ function Root() {
 export default function App() {
   return <Provider><Root /></Provider>;
 }
+
