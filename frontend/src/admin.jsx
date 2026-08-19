@@ -111,7 +111,7 @@ function imprimerEtatDesLieux({ client, bien, etat, type="entree" }) {
     ${[["Salon / Séjour","salon"],["Cuisine","cuisine"],["Chambre 1","chambre1"],["Chambre 2","chambre2"],["Salle de bain","sdb"],["WC","wc"],["Autres","autres"]].map(([l,k])=>`
     <tr><td>${l}</td><td>${etat?.pieces?.[k]||"________________"}</td><td style="min-width:120px"></td></tr>`).join("")}
   </table>
-  ${etat?.observations?`<div class="section">Observations générales</div><div class="obs-box">${etat.observations}</div>`:"<div class="section">Observations générales</div><div class="obs-box"></div>"}
+  ${etat?.observations?`<div class='section'>Observations générales</div><div class='obs-box'>${etat.observations}</div>`:'<div class="section">Observations générales</div><div class="obs-box"></div>'}
   <div class="sig">
     <div class="sig-box"><div style="font-weight:bold;color:#5c1a2b">Le Bailleur</div><div style="font-size:9pt;color:#56697a">(Signature + cachet)</div><div class="sig-line">ImmobilierCI</div></div>
     <div class="sig-box"><div style="font-weight:bold;color:#5c1a2b">Le Locataire</div><div style="font-size:9pt;color:#56697a">(Signature précédée de « Lu et approuvé »)</div><div class="sig-line">${client?.nom||"_______________"}</div></div>
@@ -2291,4 +2291,3 @@ export function AdminParams() {
     </div>
   </div>;
 }
-
