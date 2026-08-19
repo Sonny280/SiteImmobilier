@@ -410,9 +410,9 @@ export function AdminBiens() {
               {peutEcrire&&<td className="px-4 py-3"><div className="flex gap-1.5">
                 <Btn variant="outline" size="xs" onClick={()=>{setForm({...b,prix:String(b.prix),surface:String(b.surface||""),chambres:String(b.chambres||""),sdb:String(b.sdb||""),etage:String(b.etage||""),parking:String(b.parking||""),featured:b.featured===1});setModal(b);}}>✏️</Btn>
                 <Btn variant="danger" size="xs" onClick={()=>{
-                  if(b.statut==="loue") return alert("❌ Impossible de supprimer : ce bien est actuellement loué.\n\nPour libérer le bien :\n1. Allez dans Clients\n2. Ouvrez la fiche du locataire\n3. Cliquez « 🔑 Libérer le bien »");
-                  if(b.statut==="en_cours") return alert("❌ Impossible : une vente est en cours sur ce bien.\nAnnulez la vente avant de supprimer le bien.");
-                  if(b.statut==="vendu") return alert("❌ Impossible : ce bien a été vendu.\nArchivez-le plutôt (statut = Archivé).");
+                  if(b.statut==="loue") return notify("❌ Impossible de supprimer : ce bien est actuellement loué.\n\nPour libérer le bien :\n1. Allez dans Clients\n2. Ouvrez la fiche du locataire\n3. Cliquez « 🔑 Libérer le bien »", "error");
+                  if(b.statut==="en_cours") return notify("❌ Impossible : une vente est en cours sur ce bien.\nAnnulez la vente avant de supprimer le bien.", "error");
+                  if(b.statut==="vendu") return notify("❌ Impossible : ce bien a été vendu.\nArchivez-le plutôt (statut = Archivé).", "error");
                   if(!confirm(`Supprimer "${b.titre}" définitivement ?\nToutes les photos et données associées seront perdues.`)) return;
                   deleteBien(b.id);
                 }}>🗑️</Btn>
@@ -701,7 +701,7 @@ export function AdminClients() {
                   <button onClick={()=>setDetailC(c)} style={{padding:"6px 12px",border:"1px solid var(--border)",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:700,background:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>👁 Fiche</button>
                   {canWrite("clients") && <button onClick={()=>openEdit(c)} style={{padding:"6px 12px",border:"1px solid var(--border)",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:700,background:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>✏️</button>}
                   {canWrite("clients") && <button onClick={()=>{
-                    if(c.bienId||c.bien_id) return alert("❌ Libérez d'abord le bien avant de supprimer ce client.");
+                    if(c.bienId||c.bien_id) return notify("❌ Libérez d'abord le bien avant de supprimer ce client.", "error");
                     if(!confirm(`Supprimer ${c.nom} ?`)) return;
                     deleteClient(c.id);
                   }} style={{padding:"6px 10px",border:"1px solid #fecaca",borderRadius:"7px",cursor:"pointer",fontSize:"11px",color:"#dc2626",background:"#fef2f2",fontFamily:"Plus Jakarta Sans,sans-serif"}}>🗑</button>}
@@ -1013,13 +1013,13 @@ export function AdminLoyers() {
     }));
 
   const handleSave = () => {
-    if(!f.clientId) return alert("Sélectionnez un locataire.");
-    if(!f.bienId)   return alert("Sélectionnez un bien.");
-    if(!f.montant||+f.montant<=0) return alert("Montant invalide.");
-    if(!f.mois)     return alert("Sélectionnez le mois.");
+    if(!f.clientId) return notify("Sélectionnez un locataire.", "error");
+    if(!f.bienId)   return notify("Sélectionnez un bien.", "error");
+    if(!f.montant||+f.montant<=0) return notify("Montant invalide.", "error");
+    if(!f.mois)     return notify("Sélectionnez le mois.", "error");
     // Vérifier doublon
     const exist = loyers.find(l=>l.clientId===+f.clientId&&l.bienId===+f.bienId&&l.mois===f.mois);
-    if(exist) return alert(`⚠️ Un loyer existe déjà pour ce locataire sur ce bien pour ${f.mois}. Vérifiez la liste.`);
+    if(exist) return notify(`⚠️ Un loyer existe déjà pour ce locataire sur ce bien pour ${f.mois}. Vérifiez la liste.`, "warn");
     addLoyer({...f, clientId:+f.clientId, bienId:+f.bienId, montant:+f.montant});
     setModal(false);
     setF(empty);
@@ -1224,7 +1224,7 @@ export function AdminLoyers() {
             // Vérifier doublon immédiatement
             if(f.clientId&&f.bienId) {
               const exist = loyers.find(l=>l.clientId===+f.clientId&&l.bienId===+f.bienId&&l.mois===e.target.value);
-              if(exist) alert(`⚠️ Attention : un loyer existe déjà pour ce locataire en ${e.target.value}.`);
+              if(exist) notify(`⚠️ Attention : un loyer existe déjà pour ce locataire en ${e.target.value}.`, "warn");
             }
           }}/>
         </div>
@@ -1311,13 +1311,13 @@ export function AdminVentes() {
   };
 
   const handleSave = (isEdit=false) => {
-    if(!f.bienId)       return alert("Sélectionnez le bien concerné.");
-    if(!f.acheteurNom)  return alert("Le nom de l'acheteur est obligatoire.");
-    if(!f.acheteurTel&&!f.acheteurEmail) return alert("Indiquez au moins un contact acheteur (tél ou email).");
-    if(!f.prixAffiche||+f.prixAffiche<=0) return alert("Le prix affiché est obligatoire et doit être > 0.");
-    if(f.prixNegociation&&+f.prixNegociation>+f.prixAffiche) return alert("⚠️ Le prix négocié ne peut pas dépasser le prix affiché.");
-    if(f.prixFinal&&+f.prixFinal>+f.prixAffiche) return alert("⚠️ Le prix final ne peut pas dépasser le prix affiché.");
-    if(+f.tauxCommission<0||+f.tauxCommission>20) return alert("Le taux de commission doit être entre 0% et 20%.");
+    if(!f.bienId)       return notify("Sélectionnez le bien concerné.", "error");
+    if(!f.acheteurNom)  return notify("Le nom de l'acheteur est obligatoire.", "error");
+    if(!f.acheteurTel&&!f.acheteurEmail) return notify("Indiquez au moins un contact acheteur (tél ou email).", "error");
+    if(!f.prixAffiche||+f.prixAffiche<=0) return notify("Le prix affiché est obligatoire et doit être > 0.", "error");
+    if(f.prixNegociation&&+f.prixNegociation>+f.prixAffiche) return notify("⚠️ Le prix négocié ne peut pas dépasser le prix affiché.", "warn");
+    if(f.prixFinal&&+f.prixFinal>+f.prixAffiche) return notify("⚠️ Le prix final ne peut pas dépasser le prix affiché.", "warn");
+    if(+f.tauxCommission<0||+f.tauxCommission>20) return notify("Le taux de commission doit être entre 0% et 20%.", "error");
     const data = {
       ...f,
       bienId:+f.bienId,
@@ -1340,7 +1340,7 @@ export function AdminVentes() {
     const ns = ETAPES_VENTE[nextIdx];
     // Bloquer finalisation si reste à payer
     if(ns==="finalisee"&&v.prixFinal&&(v.resteAPayer||0)>0)
-      return alert(`❌ Impossible de finaliser : il reste ${fmt(v.resteAPayer)} FCFA à encaisser.`);
+      return notify(`❌ Impossible de finaliser : il reste ${fmt(v.resteAPayer)} FCFA à encaisser.`, "error");
     // Confirmer passage à compromis (important)
     if(ns==="compromis"&&!confirm(`Passer en COMPROMIS signé ?\nCela indique qu'un avant-contrat a été signé par les deux parties.`)) return;
     // Confirmer acte notarié
@@ -1501,13 +1501,13 @@ export function AdminVentes() {
         </div>
         <div>
           <Inp label="Prix négocié (FCFA)" type="number" value={f.prixNegociation} onChange={e=>{
-            if(f.prixAffiche&&+e.target.value>+f.prixAffiche) return alert("Le prix négocié ne peut pas dépasser le prix affiché.");
+            if(f.prixAffiche&&+e.target.value>+f.prixAffiche) return notify("Le prix négocié ne peut pas dépasser le prix affiché.", "warn");
             if(+e.target.value>=0) sf("prixNegociation",e.target.value);
           }}/>
         </div>
         <div>
           <Inp label="Prix final signé (FCFA)" type="number" value={f.prixFinal} onChange={e=>{
-            if(f.prixAffiche&&+e.target.value>+f.prixAffiche) return alert("Le prix final ne peut pas dépasser le prix affiché.");
+            if(f.prixAffiche&&+e.target.value>+f.prixAffiche) return notify("Le prix final ne peut pas dépasser le prix affiché.", "warn");
             if(+e.target.value>=0) sf("prixFinal",e.target.value);
           }}/>
         </div>
@@ -1552,7 +1552,7 @@ export function AdminVentes() {
         </div>
         <div>
           <Inp label="Prix final (FCFA)" type="number" value={f.prixFinal} onChange={e=>{
-            if(f.prixAffiche&&+e.target.value>+f.prixAffiche) return alert("Prix final > prix affiché.");
+            if(f.prixAffiche&&+e.target.value>+f.prixAffiche) return notify("Prix final > prix affiché.", "error");
             if(+e.target.value>=0) sf("prixFinal",e.target.value);
           }}/>
           {commissionAuto>0&&<p style={{fontSize:"11px",color:"var(--gold)",marginTop:"3px",fontWeight:600}}>Commission : {fmt(commissionAuto)} FCFA</p>}
@@ -1722,7 +1722,7 @@ export function AdminVentes() {
           <div>
             <Inp label="Montant *" type="number" value={pf.montant} onChange={e=>{
               const max = paiM.resteAPayer||0;
-              if(+e.target.value>max) return alert(`Maximum : ${fmt(max)} FCFA (reste à payer).`);
+              if(+e.target.value>max) return notify(`Maximum : ${fmt(max)} FCFA (reste à payer).`, "error");
               if(+e.target.value>=0) spf("montant",e.target.value);
             }}/>
             <p style={{fontSize:"11px",color:"var(--gray)",marginTop:"3px"}}>Maximum : {fmt(paiM.resteAPayer)} FCFA</p>
@@ -1747,7 +1747,7 @@ export function AdminVentes() {
         <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
           <Btn variant="outline" onClick={()=>setPaiM(null)}>Annuler</Btn>
           {paiM.resteAPayer>0&&<Btn variant="primary" onClick={()=>{
-            if(!pf.montant||+pf.montant<=0) return alert("Montant invalide.");
+            if(!pf.montant||+pf.montant<=0) return notify("Montant invalide.", "error");
             addPaiementVente(paiM.id,{...pf,montant:+pf.montant});
             setPaiM(null);
           }}>Enregistrer le paiement</Btn>}
@@ -1824,15 +1824,15 @@ export function AdminContrats() {
   const alertes = contrats.filter(c=>c.type!=="vente"&&(c.expirationProche||c.expire||(c.statut==="renouveler")));
 
   const save = () => {
-    if(!f.clientId) return alert("Sélectionnez un client.");
-    if(!f.bienId)   return alert("Sélectionnez un bien.");
+    if(!f.clientId) return notify("Sélectionnez un client.", "error");
+    if(!f.bienId)   return notify("Sélectionnez un bien.", "error");
     if(f.type==="bail") {
-      if(!f.dateDebut)       return alert("Date de début obligatoire.");
-      if(!f.loyer||+f.loyer<=0) return alert("Le loyer doit être supérieur à 0.");
+      if(!f.dateDebut)       return notify("Date de début obligatoire.", "error");
+      if(!f.loyer||+f.loyer<=0) return notify("Le loyer doit être supérieur à 0.", "error");
     }
     if(f.type==="vente") {
-      if(!f.dateSignature)   return alert("Date de signature obligatoire.");
-      if(!f.prixVente||+f.prixVente<=0) return alert("Le prix de vente doit être supérieur à 0.");
+      if(!f.dateSignature)   return notify("Date de signature obligatoire.", "error");
+      if(!f.prixVente||+f.prixVente<=0) return notify("Le prix de vente doit être supérieur à 0.", "error");
     }
     addContrat({...f,
       clientId:+f.clientId, bienId:+f.bienId,
@@ -1915,7 +1915,7 @@ export function AdminContrats() {
                 <Btn variant="ghost" size="xs" onClick={()=>setDetail(c)}>👁</Btn>
                 {peutEcrire&&isBail&&(c.expirationProche||c.expire||c.statut==="renouveler")&&(
                   <Btn variant="amber" size="xs" onClick={()=>{
-                    if(!c.dateFin) return alert("Pas de date de fin définie.");
+                    if(!c.dateFin) return notify("Pas de date de fin définie.", "error");
                     if(!confirm(`Renouveler pour 1 an ?`)) return;
                     const d=new Date(c.dateFin); d.setFullYear(d.getFullYear()+1);
                     updateContrat(c.id,{statut:"actif",dateFin:d.toISOString().split("T")[0]});
@@ -2113,7 +2113,7 @@ export function AdminVisites() {
           <Inp label="Nom visiteur *" value={f.nom} onChange={e=>sf("nom",e.target.value)}/><Inp label="Téléphone" value={f.tel} onChange={e=>sf("tel",e.target.value)}/>
           <div>
             <Inp label="Date *" type="date" value={f.date} onChange={e=>{
-              if(e.target.value<new Date().toISOString().split("T")[0]) return alert("❌ Vous ne pouvez pas planifier une visite dans le passé.");
+              if(e.target.value<new Date().toISOString().split("T")[0]) return notify("❌ Vous ne pouvez pas planifier une visite dans le passé.", "error");
               sf("date",e.target.value);
             }}/>
           </div>
@@ -2138,13 +2138,13 @@ export function AdminParams() {
   const handleLogoUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2*1024*1024) { alert("Logo trop lourd (max 2 Mo)"); return; }
+    if (file.size > 2*1024*1024) { notify("Logo trop lourd (max 2 Mo)", "error"); return; }
     const reader = new FileReader();
     reader.onload = (ev) => {
       const url = ev.target.result;
       setLogo(url);
       localStorage.setItem("ag_logo", url);
-      alert("Logo enregistré — il apparaîtra sur tous vos reçus.");
+      notify("Logo enregistré — il apparaîtra sur tous vos reçus.", "error");
     };
     reader.readAsDataURL(file);
   };

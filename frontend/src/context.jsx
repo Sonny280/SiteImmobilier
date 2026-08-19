@@ -127,7 +127,7 @@ export function Provider({ children }) {
       timer = setTimeout(()=>{
         sessionStorage.removeItem("_ici_tok"); _memToken="";
         setUser(null); setPage("accueil");
-        alert("Session expirée — déconnecté après 1 heure d\'inactivité.");
+        // Session expirée — notification gérée par le redirect vers login
       }, TIMEOUT);
     };
     reset();
@@ -247,3 +247,4 @@ export function Provider({ children }) {
     </Ctx.Provider>
   );
 }
+
