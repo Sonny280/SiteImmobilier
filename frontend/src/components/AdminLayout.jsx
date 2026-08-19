@@ -1,7 +1,6 @@
 // components/AdminLayout.jsx — sidebar responsive sans Tailwind (window.innerWidth)
 import { useState, useEffect, useRef } from "react";
 import { useCtx } from "../context.jsx";
-import { useCtx } from "../context.jsx";
 import { AG } from "../utils.js";
 import { AdminDashboard, AdminBiens, AdminClients, AdminLoyers, AdminVentes, AdminDemandes, AdminContrats, AdminVisites, AdminParams } from "../admin.jsx";
 import { AdminBlog } from "../AdminBlog.jsx";
