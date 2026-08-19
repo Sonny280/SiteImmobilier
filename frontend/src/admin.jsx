@@ -5,6 +5,7 @@ import { Badge, Inp, Sel, Txta, Modal, KpiCard, Gallery, PhotoUpload } from "./u
 import { fmt, fmtM, wa, photoSrc, TL, SL, SC, ETAPES_VENTE, API, AG } from "./utils.js";
 import { genererQuittanceLoyer, genererRecuVente } from "./components/Recu.jsx";
 import { genererContratBail, genererContratVente } from "./utils/genContrats.js";
+import { DocumentsPanel } from "./components/Documents.jsx";
 
 // #4 Impression état des lieux PDF
 function imprimerEtatDesLieux({ client, bien, etatLieux, type="sortie" }) {
