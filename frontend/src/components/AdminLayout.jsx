@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useCtx } from "../context.jsx";
 import { AG } from "../utils.js";
-import { AdminDashboard, AdminBiens, AdminClients, AdminLoyers, AdminVentes, AdminDemandes, AdminContrats, AdminVisites, AdminParams, NotifyProvider } from "../admin.jsx";
+import { AdminDashboard, AdminBiens, AdminClients, AdminLoyers, AdminVentes, AdminDemandes, AdminVisites, AdminParams, NotifyProvider } from "../admin.jsx";
 import { AdminBlog } from "../AdminBlog.jsx";
 import { AdminTemoignages } from "../AdminTemoignages.jsx";
 import { AdminRealisations } from "../AdminRealisations.jsx";
@@ -21,7 +21,7 @@ const ADMIN_TABS = [
   // Section financière
   { id:"loyers",       l:"Loyers",           icon:"💰", section:"finance" },
   { id:"ventes",       l:"Ventes",           icon:"🤝", section:"finance" },
-  { id:"contrats",     l:"Contrats",         icon:"📄", section:"finance" },
+
   // Section commercial
   { id:"demandes",     l:"Demandes",         icon:"📩", section:"commercial" },
   { id:"visites",      l:"Agenda visites",   icon:"📅", section:"commercial" },
@@ -50,7 +50,7 @@ const TAB_ROLES = {
   loyers:       ["superadmin","admin","comptable","lecture"],
   ventes:       ["superadmin","admin","comptable","lecture"],
   demandes:     ["superadmin","admin","commercial","lecture"],
-  contrats:     ["superadmin","admin","commercial","comptable","lecture"],
+
   visites:      ["superadmin","admin","commercial","lecture"],
   // blog:         ["superadmin","admin"],
   temoignages:  ["superadmin","admin"],
@@ -73,7 +73,7 @@ function SidebarContent({ showLabels, onNav }) {
   const CONTENT = {
     dashboard:<AdminDashboard/>, biens:<AdminBiens/>, clients:<AdminClients/>,
     loyers:<AdminLoyers/>, ventes:<AdminVentes/>, demandes:<AdminDemandes/>,
-    contrats:<AdminContrats/>, visites:<AdminVisites/>, blog:<AdminBlog/>,
+    visites:<AdminVisites/>, blog:<AdminBlog/>,
     temoignages:<AdminTemoignages/>, realisations:<AdminRealisations/>,
     utilisateurs:<AdminUsers/>, monprofil:<AdminMonProfil/>, params:<AdminParams/>,
   };
@@ -148,7 +148,7 @@ function AdminLayout(){
   const CONTENT = {
     dashboard:<AdminDashboard/>, biens:<AdminBiens/>, clients:<AdminClients/>,
     loyers:<AdminLoyers/>, ventes:<AdminVentes/>, demandes:<AdminDemandes/>,
-    contrats:<AdminContrats/>, visites:<AdminVisites/>, blog:<AdminBlog/>,
+    visites:<AdminVisites/>, blog:<AdminBlog/>,
     temoignages:<AdminTemoignages/>, realisations:<AdminRealisations/>,
     utilisateurs:<AdminUsers/>, monprofil:<AdminMonProfil/>, params:<AdminParams/>,
   };

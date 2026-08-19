@@ -58,86 +58,150 @@ export function imprimerRecu(html) {
 // ── Reçu de loyer (quittance) ────────────────────────────────
 export async function genererQuittanceLoyer({ loyer, client, bien }) {
   const logoUrl = await getLogoUrl();
-  const num = `QUI-${(loyer.id||"").toString().padStart(4,"0")}-${(loyer.mois||"").replace("-","")}`;
-  const moisFmt = new Date((loyer.mois||"2025-01")+"-01").toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
-  const html = `
+  const today = new Date().toLocaleDateString("fr-FR");
+  const num = `QT-${new Date().getFullYear()}-${String(loyer?.id||Date.now().toString().slice(-4)).padStart(4,"0")}`;
+
+  function nombreEnLettres(n) {
+    if (!n || isNaN(n)) return "___________________________";
+    const u = ["","un","deux","trois","quatre","cinq","six","sept","huit","neuf","dix","onze","douze","treize","quatorze","quinze","seize","dix-sept","dix-huit","dix-neuf"];
+    const d = ["","","vingt","trente","quarante","cinquante","soixante","soixante","quatre-vingt","quatre-vingt"];
+    function conv(nb) {
+      if (nb === 0) return "zéro";
+      if (nb < 20) return u[nb];
+      if (nb < 100) { const dd=Math.floor(nb/10),ud=nb%10; if(dd===7||dd===9) return d[dd]+(ud===1?"-et-":"-")+u[10+ud]; return d[dd]+(ud===1&&dd!==8?"-et-":ud?"-":"")+(ud?u[ud]:(dd===8?"s":"")); }
+      if (nb < 1000) { const c=Math.floor(nb/100),r=nb%100; return (c>1?u[c]+"-cent":"cent")+(r?(c>1?"s":"")+"-"+conv(r):(c>1?"s":"")); }
+      if (nb < 1000000) { const m=Math.floor(nb/1000),r=nb%1000; return (m>1?conv(m)+"-mille":"mille")+(r?"-"+conv(r):""); }
+      const m=Math.floor(nb/1000000),r=nb%1000000; return conv(m)+" million"+(m>1?"s":"")+(r?"-"+conv(r):"");
+    }
+    return conv(Math.round(n)) + " francs CFA";
+  }
+
+  const montant = loyer?.montantRecu || loyer?.montant || 0;
+  const fmtN = n => n ? new Intl.NumberFormat("fr-CI").format(n) : "0";
+
+  const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Quittance de loyer — ${client?.nom||""}</title>
+  <style>
+    @page { size: A5 landscape; margin: 12mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 11pt; color: #222; background: white; }
+    .wrap { border: 2px solid #1a3a6b; padding: 14px 18px; min-height: 180px; }
+    .header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 2px solid #1a3a6b; padding-bottom: 10px; margin-bottom: 12px; }
+    .logo-zone { display: flex; align-items: center; gap: 12px; }
+    .logo-zone img { height: 55px; max-width: 130px; object-fit: contain; }
+    .agence-info { font-size: 9pt; color: #333; line-height: 1.6; }
+    .agence-name { font-size: 14pt; font-weight: 900; color: #5c1a2b; letter-spacing: -0.02em; margin-bottom: 2px; }
+    .title-zone { text-align: right; }
+    .titre { font-size: 18pt; font-weight: 900; color: #1a3a6b; text-transform: uppercase; letter-spacing: 1px; }
+    .num { font-size: 10pt; color: #333; margin-top: 4px; }
+    .date-bpf { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 10pt; }
+    .bpf { font-size: 14pt; font-weight: 900; color: #1a3a6b; }
+    .row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px; font-size: 10.5pt; }
+    .row-label { color: #1a3a6b; font-weight: 600; white-space: nowrap; min-width: 120px; }
+    .row-value { border-bottom: 1px dotted #999; flex: 1; font-weight: 700; padding-bottom: 1px; }
+    .row-value.big { font-size: 13pt; text-align: center; background: #e8f0fe; padding: 3px 10px; border: none; border-radius: 4px; }
+    .row-value.highlight { background: #e8f0fe; text-align: center; padding: 3px 8px; border: none; font-size: 11pt; }
+    .footer-text { font-size: 8pt; color: #555; margin-top: 14px; border-top: 1px solid #ccc; padding-top: 6px; font-style: italic; }
+    .sig { display: flex; justify-content: flex-end; margin-top: 12px; }
+    .sig-box { text-align: center; min-width: 160px; }
+    .sig-label { font-size: 9pt; color: #555; }
+    .sig-line { border-top: 1px solid #333; margin-top: 36px; padding-top: 4px; font-size: 9pt; color: #333; }
+    .print-btn { position: fixed; top: 12px; right: 12px; background: #5c1a2b; color: white; border: none; padding: 8px 18px; border-radius: 7px; cursor: pointer; font-size: 12px; font-family: Arial; }
+    @media print { .print-btn { display: none; } }
+    .dont { font-weight: 900; color: #1a3a6b; }
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">🖨️ Imprimer</button>
+  <div class="wrap">
+    <!-- En-tête -->
     <div class="header">
-      <div class="logo-block">
-        ${AG.logo
-          ? `<img src="${logoUrl}" alt="ImmobilierCI" style="height:60px;max-width:200px;object-fit:contain;margin-bottom:8px;display:block;"/>`
-          : `<div class="name">ImmobilierCI</div>`
+      <div class="logo-zone">
+        ${logoUrl
+          ? `<img src="${logoUrl}" alt="Logo"/>`
+          : `<div style="width:55px;height:55px;background:#5c1a2b;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#b8923f;font-weight:900;font-size:16px">IC</div>`
         }
-        <div class="tagline">${AG.slogan}</div>
-        <div class="contact">
-          ${AG.tel1}${AG.tel2 && AG.tel2 !== AG.tel1 ? ' · ' + AG.tel2 : ''}<br/>
-          ${AG.email}<br/>
-          ${AG.adresse}
+        <div>
+          <div class="agence-name">ImmobilierCI</div>
+          <div class="agence-info">
+            Agence Immobilière Agréée<br/>
+            ${AG.adresse||"Abidjan, Côte d'Ivoire"}<br/>
+            ${AG.tel1||""} ${AG.tel2?" · "+AG.tel2:""}<br/>
+            ${AG.email||"contact@immobilierci.ci"}
+          </div>
         </div>
       </div>
-      <div style="text-align:right;">
-        <div class="badge">QUITTANCE DE LOYER<div class="ref">${num}</div></div>
-        <div style="font-size:12px;color:#56697a;margin-top:8px;">Émise le ${today()}</div>
+      <div class="title-zone">
+        <div class="titre">Quittance de Loyer</div>
+        <div class="num">N° ${num}</div>
       </div>
     </div>
 
-    <div class="amount-box">
-      <div class="label">Loyer du mois de ${moisFmt}</div>
-      <div class="montant">${fmt(loyer.montant)} FCFA</div>
-      <div class="en-lettres">Payé le ${loyer.datePaiement||today()} par ${(loyer.modePaiement||"virement").replace("_"," ")}</div>
-    </div>
-    <div class="gold-bar"></div>
-
-    <div class="section">
-      <div class="section-title">Locataire</div>
-      <div class="grid">
-        <div class="field"><div class="label">Nom complet</div><div class="value">${client?.nom||"—"}</div></div>
-        <div class="field"><div class="label">Téléphone</div><div class="value">${client?.tel||"—"}</div></div>
-        <div class="field"><div class="label">Profession</div><div class="value">${client?.profession||"—"}</div></div>
-        <div class="field"><div class="label">Employeur</div><div class="value">${client?.employeur||"—"}</div></div>
-      </div>
+    <!-- Date + BPF -->
+    <div class="date-bpf">
+      <div>Date : <strong>${loyer?.datePaiement ? new Date(loyer.datePaiement).toLocaleDateString("fr-FR") : today}</strong></div>
+      <div>BPF : <span class="bpf">${fmtN(montant)} Fcfa</span></div>
     </div>
 
-    <div class="section">
-      <div class="section-title">Bien loué</div>
-      <div class="grid">
-        <div class="field"><div class="label">Désignation</div><div class="value">${bien?.titre||loyer.bienTitre||"—"}</div></div>
-        <div class="field"><div class="label">Référence</div><div class="value">${bien?.ref||"—"}</div></div>
-        <div class="field"><div class="label">Localisation</div><div class="value">${bien?.quartier||"—"}, ${bien?.commune||"—"}</div></div>
-        <div class="field"><div class="label">Loyer mensuel</div><div class="value">${fmt(loyer.montant)} FCFA / mois</div></div>
-      </div>
+    <!-- Reçu de -->
+    <div class="row">
+      <span class="row-label">Reçu de M.</span>
+      <span class="row-value">${client?.nom||"___________________________"}</span>
     </div>
 
-    <div class="section">
-      <div class="section-title">Détail du paiement</div>
-      <div class="grid">
-        <div class="field"><div class="label">Période</div><div class="value">${moisFmt}</div></div>
-        <div class="field"><div class="label">Date de paiement</div><div class="value">${loyer.datePaiement||today()}</div></div>
-        <div class="field"><div class="label">Mode de paiement</div><div class="value">${(loyer.modePaiement||"virement").replace("_"," ")}</div></div>
-        <div class="field"><div class="label">Montant reçu</div><div class="value" style="color:#5c1a2b;font-size:18px;">${fmt(loyer.montant)} FCFA</div></div>
-      </div>
+    <!-- Somme en lettres -->
+    <div class="row">
+      <span class="row-label" style="line-height:1.3">La somme de<br/><small>(en lettres)</small></span>
+      <span class="row-value big">${nombreEnLettres(montant)}</span>
     </div>
 
-    <div class="signatures">
+    <!-- Pour loyer -->
+    <div class="row">
+      <span class="row-label">Pour le loyer de</span>
+      <span class="row-value highlight">${loyer?.mois||"___________"}</span>
+      <span style="white-space:nowrap;font-size:10.5pt"> des locaux qu'il occupe dans</span>
+    </div>
+
+    <!-- Adresse bien -->
+    <div class="row">
+      <span class="row-label">La maison située</span>
+      <span class="row-value">${bien?.adresse||bien?.commune||"___________________________"}</span>
+    </div>
+
+    <!-- Le dit / Commençant -->
+    <div class="row">
+      <span class="row-label">Le dit</span>
+      <span class="row-value">${bien?.titre||"_______________"}</span>
+      <span style="white-space:nowrap;font-size:10.5pt"> commençant le </span>
+      <span class="row-value">${client?.dateEntree||client?.date_entree||"___________"}</span>
+    </div>
+
+    <!-- Mode paiement -->
+    <div class="row">
+      <span class="row-label">Mode de paiement</span>
+      <span class="row-value">${(loyer?.modePaiement||"virement").replace("_"," ")}</span>
+      <span style="margin-left:20px;font-size:11pt;" class="dont">DONT QUITTANCE.</span>
+    </div>
+
+    <!-- Signature -->
+    <div class="sig">
       <div class="sig-box">
-        <div class="sig-space"></div>
-        <div class="sig-label">Signature du locataire</div>
-        <div style="font-size:12px;color:#56697a;margin-top:4px;">${client?.nom||""}</div>
-      </div>
-      <div class="sig-box">
-        <div class="sig-space"></div>
-        <div class="sig-label">Cachet & Signature ImmobilierCI</div>
-        <div style="font-size:12px;color:#56697a;margin-top:4px;">Kouassi Atse Charles — Directeur</div>
+        <div class="sig-label">Le Bailleur / ImmobilierCI</div>
+        <div class="sig-line">Signature + Cachet</div>
       </div>
     </div>
+  </div>
+</body>
+</html>`;
 
-    <div class="footer">
-      ImmobilierCI — Agence Immobilière Agréée · ${AG.adresse} · ${AG.tel1} · ${AG.email}<br/>
-      Ce document tient lieu de quittance officielle de loyer conformément à la loi ivoirienne.
-    </div>`;
   imprimerRecu(html);
 }
 
-// ── Reçu de vente / acompte ──────────────────────────────────
+
+
 export async function genererRecuVente({ vente, paiement, bien }) {
   const logoUrl = await getLogoUrl();
   const num = `RCV-${(vente.id||"").toString().padStart(4,"0")}-${(paiement?.id||"").toString().padStart(4,"0")}`;

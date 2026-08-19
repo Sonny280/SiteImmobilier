@@ -2180,11 +2180,7 @@ export function AdminParams() {
       )}
     </div>
 
-    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-      <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4">Statut du système</h3>
-      <div className="flex items-center gap-3 mb-3"><div className={`w-3 h-3 rounded-full flex-shrink-0 ${online?"bg-emerald-500 animate-pulse":"bg-red-500"}`}/><span className="text-sm font-medium">{online?"Backend connecté — données en temps réel":"Backend hors-ligne — aucune action possible"}</span></div>
-      <p className="text-xs text-gray-500">{online?"Le serveur Node.js est actif. Toutes les modifications sont persistées en base SQLite.":"Lancez node server.js dans le dossier backend pour activer le mode réel."}</p>
-    </div>
+
     <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
       <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4">Démarrage rapide</h3>
       <div className="space-y-3">{[["1","Installer les dépendances","cd backend && npm install"],["2","Créer le compte administrateur","node seed.js  (ne crée que le compte admin, aucune fausse donnée)"],["3","Démarrer le backend","node server.js  →  http://localhost:3001"],["4","Démarrer le frontend","cd frontend && npm run dev  →  http://localhost:5173"],["5","Configurer les emails","Modifier backend/.env (SMTP_USER, SMTP_PASS Gmail)"]].map(([n,l,v])=>(
@@ -2198,3 +2194,4 @@ export function AdminParams() {
     </div>
   </div>;
 }
+
