@@ -59,6 +59,7 @@ export function Provider({ children }) {
   const [contrats,setContrats] = useState([]);
   const [visites,setVisites]   = useState([]);
   const [online,setOnline] = useState(false);
+  const [authLoading,setAuthLoading] = useState(true);
   const [toast,setToast]   = useState(null);
 
   const showToast = useCallback((msg,type="ok")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),4500); },[]);
@@ -107,12 +108,39 @@ export function Provider({ children }) {
 
   // Restaurer session depuis token stocké
   useEffect(()=>{
-    if(user||!_memToken) return;
+    if (!_memToken) { setAuthLoading(false); return; }
+    if (user) { setAuthLoading(false); return; }
     fetch(`${API}/auth/me`,{headers:{Authorization:`Bearer ${_memToken}`}})
     .then(r=>r.ok?r.json():null)
-    .then(u=>{ if(u&&u.id){ setUser(u); setOnline(true); } })
-    .catch(()=>{});
+    .then(u=>{ if(u&&u.id){ setUser(u); setOnline(true); } else { sessionStorage.removeItem("_ici_tok"); _memToken=""; } })
+    .catch(()=>{ sessionStorage.removeItem("_ici_tok"); _memToken=""; })
+    .finally(()=>setAuthLoading(false));
   },[]);
+
+  // Déconnexion automatique après 1 heure d'inactivité
+  useEffect(()=>{
+    if (!user) return;
+    const TIMEOUT = 60 * 60 * 1000;
+    let timer;
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(()=>{
+        sessionStorage.removeItem("_ici_tok"); _memToken="";
+        setUser(null); setPage("accueil");
+        alert("Session expirée — déconnecté après 1 heure d\'inactivité.");
+      }, TIMEOUT);
+    };
+    reset();
+    window.addEventListener("mousemove", reset);
+    window.addEventListener("keydown", reset);
+    window.addEventListener("click", reset);
+    return ()=>{
+      clearTimeout(timer);
+      window.removeEventListener("mousemove", reset);
+      window.removeEventListener("keydown", reset);
+      window.removeEventListener("click", reset);
+    };
+  },[user]);
 
   const loadAdmin = useCallback(async()=>{
     if(!online) return;
@@ -219,4 +247,3 @@ export function Provider({ children }) {
     </Ctx.Provider>
   );
 }
-
