@@ -1,5 +1,6 @@
 // components/AdminLayout.jsx — sidebar responsive sans Tailwind (window.innerWidth)
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useCtx } from "../context.jsx";
 import { useCtx } from "../context.jsx";
 import { AG } from "../utils.js";
 import { AdminDashboard, AdminBiens, AdminClients, AdminLoyers, AdminVentes, AdminDemandes, AdminContrats, AdminVisites, AdminParams } from "../admin.jsx";
@@ -88,6 +89,29 @@ function AdminLayout(){
 
   const [tab,     setTab]     = useState("dashboard");
   const [showLogout, setShowLogout] = useState(false);
+  const [query, setQuery]     = useState("");
+  const [results, setResults] = useState([]);
+  const [showRes, setShowRes] = useState(false);
+  const searchRef = useRef(null);
+
+  const { biens, clients, loyers, ventes } = useCtx();
+
+  const doSearch = (q) => {
+    setQuery(q);
+    if (q.trim().length < 2) { setResults([]); setShowRes(false); return; }
+    const lq = q.toLowerCase();
+    const res = [];
+    (biens||[]).filter(b => b.titre?.toLowerCase().includes(lq) || b.commune?.toLowerCase().includes(lq))
+      .slice(0,3).forEach(b => res.push({ type:"Bien", icon:"🏢", label:b.titre, sub:b.commune, action:()=>{ setTab("biens"); setShowRes(false); setQuery(""); } }));
+    (clients||[]).filter(c => c.nom?.toLowerCase().includes(lq) || c.tel?.includes(lq))
+      .slice(0,3).forEach(c => res.push({ type:"Client", icon:"👤", label:c.nom, sub:c.tel||c.type, action:()=>{ setTab("clients"); setShowRes(false); setQuery(""); } }));
+    (loyers||[]).filter(l => l.clientNom?.toLowerCase().includes(lq) || l.mois?.includes(lq))
+      .slice(0,2).forEach(l => res.push({ type:"Loyer", icon:"💰", label:l.clientNom||"—", sub:`${l.mois} · ${l.statut}`, action:()=>{ setTab("loyers"); setShowRes(false); setQuery(""); } }));
+    (ventes||[]).filter(v => v.acheteurNom?.toLowerCase().includes(lq) || v.bienTitre?.toLowerCase().includes(lq))
+      .slice(0,2).forEach(v => res.push({ type:"Vente", icon:"🏡", label:v.acheteurNom||"—", sub:v.bienTitre||"—", action:()=>{ setTab("ventes"); setShowRes(false); setQuery(""); } }));
+    setResults(res);
+    setShowRes(res.length > 0);
+  };
   const [mob,     setMob]     = useState(false);
   const [isMobile,setIsMobile]= useState(window.innerWidth < DESKTOP);
 
@@ -306,6 +330,48 @@ function AdminLayout(){
               }}>👁 Lecture seule</span>
             )}
           </div>
+          {/* Recherche globale */}
+          <div style={{ position:"relative", flex:1, maxWidth:"320px" }} ref={searchRef}>
+            <input
+              type="text"
+              placeholder="🔍 Rechercher biens, clients..."
+              value={query}
+              onChange={e=>doSearch(e.target.value)}
+              onFocus={()=>query.length>=2&&setShowRes(true)}
+              onBlur={()=>setTimeout(()=>setShowRes(false),200)}
+              style={{
+                width:"100%", padding:"8px 14px", borderRadius:"20px",
+                border:"1.5px solid var(--border)", fontSize:"13px",
+                fontFamily:"Plus Jakarta Sans,sans-serif", outline:"none",
+                background:"var(--off)",
+              }}
+            />
+            {showRes && results.length > 0 && (
+              <div style={{
+                position:"absolute", top:"calc(100% + 6px)", left:0, right:0,
+                background:"white", border:"1px solid var(--border)", borderRadius:"12px",
+                boxShadow:"0 8px 24px rgba(0,0,0,0.12)", zIndex:999, overflow:"hidden",
+              }}>
+                {results.map((r,i)=>(
+                  <div key={i} onClick={r.action} style={{
+                    padding:"10px 14px", cursor:"pointer", display:"flex", alignItems:"center", gap:"10px",
+                    borderBottom: i<results.length-1?"1px solid var(--border)":"none",
+                    background:"white",
+                  }}
+                    onMouseEnter={e=>e.currentTarget.style.background="var(--off)"}
+                    onMouseLeave={e=>e.currentTarget.style.background="white"}
+                  >
+                    <span style={{fontSize:"18px"}}>{r.icon}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:"13px",fontWeight:700,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</div>
+                      <div style={{fontSize:"11px",color:"var(--gray)"}}>{r.type} · {r.sub}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div style={{ display:"flex", gap:"8px", flexShrink:0 }}>
             {!isMobile && (
               <button onClick={()=>goTo("accueil")} className="btn btn-outline btn-sm">

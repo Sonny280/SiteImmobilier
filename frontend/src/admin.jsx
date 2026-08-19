@@ -5,7 +5,151 @@ import { Badge, Inp, Sel, Txta, Modal, KpiCard, Gallery, PhotoUpload } from "./u
 import { fmt, fmtM, wa, photoSrc, TL, SL, SC, ETAPES_VENTE, API, AG } from "./utils.js";
 import { genererQuittanceLoyer, genererRecuVente } from "./components/Recu.jsx";
 import { genererContratBail, genererContratVente } from "./utils/genContrats.js";
+
+// #4 Impression état des lieux PDF
+function imprimerEtatDesLieux({ client, bien, etatLieux, type="sortie" }) {
+  const today = new Date().toLocaleDateString("fr-FR");
+  const pieces = etatLieux?.pieces || {};
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/>
+  <title>État des lieux — ${client?.nom||""}</title>
+  <style>
+    @page { size:A4; margin:20mm; }
+    body { font-family:Georgia,serif; font-size:11pt; color:#333; }
+    h1 { text-align:center; font-size:18pt; color:#5c1a2b; margin-bottom:4px; }
+    .sub { text-align:center; font-size:10pt; color:#56697a; margin-bottom:20px; }
+    .section { font-weight:bold; color:#5c1a2b; border-bottom:1px solid #b8923f; padding-bottom:4px; margin:16px 0 10px; font-size:11pt; text-transform:uppercase; letter-spacing:0.08em; }
+    .row { display:flex; justify-content:space-between; margin:6px 0; font-size:10.5pt; }
+    .label { color:#56697a; }
+    table { width:100%; border-collapse:collapse; margin:10px 0; }
+    th { background:#5c1a2b; color:white; padding:8px; font-size:10pt; text-align:left; }
+    td { padding:8px; border:1px solid #e8ddd5; font-size:10pt; }
+    tr:nth-child(even) td { background:#fdf8f5; }
+    .sig { margin-top:40px; display:flex; justify-content:space-between; }
+    .sig-box { text-align:center; width:40%; }
+    .sig-line { border-top:1px solid #333; margin-top:50px; padding-top:8px; font-size:10pt; color:#56697a; }
+    @media print { .no-print { display:none; } }
+    .print-btn { position:fixed; top:20px; right:20px; background:#5c1a2b; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-size:14px; }
+  </style></head><body>
+  <button class="print-btn no-print" onclick="window.print()">🖨️ Imprimer / PDF</button>
+  <h1>État des Lieux de ${type==="sortie"?"Sortie":"Entrée"}</h1>
+  <p class="sub">ImmobilierCI — Agence Immobilière Agréée · Abidjan, Côte d'Ivoire</p>
+
+  <div class="section">Informations générales</div>
+  <div class="row"><span class="label">Date :</span><span>${type==="sortie"?(etatLieux?.dateSortie||today):today}</span></div>
+  <div class="row"><span class="label">Locataire :</span><span>${client?.nom||"—"}</span></div>
+  <div class="row"><span class="label">Téléphone :</span><span>${client?.tel||client?.whatsapp||"—"}</span></div>
+  <div class="row"><span class="label">CNI :</span><span>${client?.pieceIdentite||client?.piece_identite||"—"}</span></div>
+  <div class="row"><span class="label">Bien :</span><span>${bien?.titre||"—"}</span></div>
+  <div class="row"><span class="label">Adresse :</span><span>${bien?.adresse||bien?.commune||"—"}</span></div>
+  <div class="row"><span class="label">Loyer mensuel :</span><span>${client?.loyer?new Intl.NumberFormat("fr-CI").format(client.loyer)+" FCFA":"—"}</span></div>
+  <div class="row"><span class="label">Caution :</span><span>${client?.caution?new Intl.NumberFormat("fr-CI").format(client.caution)+" FCFA":"—"}</span></div>
+  ${type==="sortie"?`<div class="row"><span class="label">Caution remboursée :</span><span>${etatLieux?.caution_rendue?"✅ Oui":"❌ Non"}</span></div>`:""}
+
+  <div class="section">État des pièces</div>
+  <table>
+    <tr><th>Pièce</th><th>État</th><th>Observations</th></tr>
+    ${Object.entries(pieces).map(([k,v])=>`<tr><td>${{salon:"Salon/Séjour",cuisine:"Cuisine",chambre1:"Chambre 1",chambre2:"Chambre 2",sdb:"Salle de bain",wc:"WC",autres:"Autres"}[k]||k}</td><td>${v||"—"}</td><td></td></tr>`).join("")}
+  </table>
+
+  ${etatLieux?.observations?`<div class="section">Observations générales</div><p>${etatLieux.observations}</p>`:""}
+
+  <div class="section">Signatures</div>
+  <p style="font-style:italic;font-size:10pt;color:#56697a;">Fait en deux exemplaires originaux.</p>
+  <div class="sig">
+    <div class="sig-box"><div class="sig-line">Le Bailleur / ImmobilierCI</div></div>
+    <div class="sig-box"><div class="sig-line">Le Locataire : ${client?.nom||""}</div></div>
+  </div>
+  </body></html>`;
+  const w = window.open("","_blank","width=820,height=700");
+  w.document.write(html); w.document.close();
+}
+
+// Imprimer état des lieux (entrée ou sortie)
+function imprimerEtatDesLieux({ client, bien, etat, type="entree" }) {
+  const today = new Date().toLocaleDateString("fr-FR");
+  const titre = type === "entree" ? "ÉTAT DES LIEUX D'ENTRÉE" : "ÉTAT DES LIEUX DE SORTIE";
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/>
+  <title>${titre}</title>
+  <style>
+    @page{margin:15mm;size:A4}body{font-family:Georgia,serif;font-size:11pt;color:#333}
+    .header{border-bottom:2px solid #b8923f;padding-bottom:8px;margin-bottom:16px;display:flex;justify-content:space-between}
+    .agence{font-size:14pt;font-weight:bold;color:#5c1a2b}
+    h1{text-align:center;font-size:16pt;color:#5c1a2b;text-transform:uppercase;margin:16px 0}
+    .section{font-weight:bold;color:#5c1a2b;border-bottom:1px solid #b8923f;padding:6px 0;margin:14px 0 8px;font-size:11pt}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px}
+    .champ{margin:4px 0}.champ strong{color:#5c1a2b}
+    .piece-table{width:100%;border-collapse:collapse;margin:8px 0}
+    .piece-table th{background:#5c1a2b;color:white;padding:6px 10px;text-align:left;font-size:10pt}
+    .piece-table td{padding:6px 10px;border:1px solid #ddd;font-size:10pt}
+    .piece-table tr:nth-child(even){background:#fdf8f5}
+    .sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px}
+    .sig-box{text-align:center}.sig-line{border-top:1px solid #333;margin-top:50px;padding-top:6px;font-size:9pt}
+    .obs-box{border:1px solid #ddd;border-radius:6px;padding:12px;min-height:60px;margin:8px 0;font-size:10pt}
+    @media print{.no-print{display:none}}
+    .print-btn{position:fixed;top:16px;right:16px;background:#5c1a2b;color:white;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px}
+  </style></head><body>
+  <button class="print-btn no-print" onclick="window.print()">🖨️ Imprimer / PDF</button>
+  <div class="header">
+    <div><div class="agence">ImmobilierCI</div><div style="font-size:9pt;color:#56697a">Agence Immobilière Agréée · Abidjan</div></div>
+    <div style="text-align:right;font-size:9pt;color:#56697a">Émis le ${today}</div>
+  </div>
+  <h1>${titre}</h1>
+  <div class="section">Informations générales</div>
+  <div class="grid">
+    <div class="champ"><strong>Locataire :</strong> ${client?.nom||"_______________"}</div>
+    <div class="champ"><strong>Téléphone :</strong> ${client?.tel||"_______________"}</div>
+    <div class="champ"><strong>Bien :</strong> ${bien?.titre||"_______________"}</div>
+    <div class="champ"><strong>Adresse :</strong> ${bien?.adresse||bien?.commune||"_______________"}</div>
+    <div class="champ"><strong>Date ${type==="entree"?"d'entrée":"de sortie"} :</strong> ${etat?.dateSortie||today}</div>
+    <div class="champ"><strong>Loyer mensuel :</strong> ${client?.loyer?new Intl.NumberFormat("fr-CI").format(client.loyer)+" FCFA":"_______________"}</div>
+    ${type==="sortie"?`<div class="champ"><strong>Caution :</strong> ${client?.caution?new Intl.NumberFormat("fr-CI").format(client.caution)+" FCFA":"_______________"}</div>
+    <div class="champ"><strong>Caution remboursée :</strong> ${etat?.caution_rendue?"✅ Oui":"❌ Non"}</div>`:""}
+  </div>
+  <div class="section">État des pièces</div>
+  <table class="piece-table">
+    <tr><th>Pièce</th><th>État</th><th>Observations</th></tr>
+    ${[["Salon / Séjour","salon"],["Cuisine","cuisine"],["Chambre 1","chambre1"],["Chambre 2","chambre2"],["Salle de bain","sdb"],["WC","wc"],["Autres","autres"]].map(([l,k])=>`
+    <tr><td>${l}</td><td>${etat?.pieces?.[k]||"________________"}</td><td style="min-width:120px"></td></tr>`).join("")}
+  </table>
+  ${etat?.observations?`<div class="section">Observations générales</div><div class="obs-box">${etat.observations}</div>`:"<div class="section">Observations générales</div><div class="obs-box"></div>"}
+  <div class="sig">
+    <div class="sig-box"><div style="font-weight:bold;color:#5c1a2b">Le Bailleur</div><div style="font-size:9pt;color:#56697a">(Signature + cachet)</div><div class="sig-line">ImmobilierCI</div></div>
+    <div class="sig-box"><div style="font-weight:bold;color:#5c1a2b">Le Locataire</div><div style="font-size:9pt;color:#56697a">(Signature précédée de « Lu et approuvé »)</div><div class="sig-line">${client?.nom||"_______________"}</div></div>
+  </div>
+  </body></html>`;
+  const w = window.open("","_blank","width=800,height=700");
+  w.document.write(html); w.document.close();
+}
+
+// WhatsApp automatique
+function waLoyer(client, loyer) {
+  const msg = `Bonjour ${client?.nom||""},\n\nNous vous rappelons que votre loyer du mois de ${loyer?.mois||""} d'un montant de ${loyer?.montant?new Intl.NumberFormat("fr-CI").format(loyer.montant)+" FCFA":""} est à régler.\n\nMerci de procéder au paiement dans les meilleurs délais.\n\nCordialement,\nImmobilierCI\n+225 07 57 86 48 36`;
+  const tel = (client?.whatsapp||client?.tel||"").replace(/\D/g,"");
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`,"_blank");
+}
+
+function waConfirmPaiement(client, loyer) {
+  const msg = `Bonjour ${client?.nom||""},\n\nNous accusons réception de votre paiement de loyer :\n• Mois : ${loyer?.mois||""}\n• Montant : ${loyer?.montantRecu?new Intl.NumberFormat("fr-CI").format(loyer.montantRecu)+" FCFA":""}\n• Date : ${loyer?.datePaiement||""}\n\nVotre quittance vous sera remise sous peu.\n\nMerci pour votre fidélité.\nImmobilierCI`;
+  const tel = (client?.whatsapp||client?.tel||"").replace(/\D/g,"");
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`,"_blank");
+}
 import { DocumentsPanel } from "./components/Documents.jsx";
+import * as XLSX from "xlsx";
+
+// Export Excel générique
+function exportExcel(data, colonnes, nomFichier) {
+  const ws = XLSX.utils.json_to_sheet(data.map(row => {
+    const obj = {};
+    colonnes.forEach(([key, label]) => { obj[label] = row[key] ?? ""; });
+    return obj;
+  }));
+  // Largeur colonnes auto
+  const cols = colonnes.map(([,label]) => ({ wch: Math.max(label.length, 15) }));
+  ws["!cols"] = cols;
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Données");
+  XLSX.writeFile(wb, `${nomFichier}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
 
 // Btn mini inline pour admin
 const Btn=({children,variant="primary",size="md",className="",...p})=>{
@@ -197,9 +341,9 @@ export function AdminDashboard() {
                   </div>
                   <div style={{fontSize:"11px",fontWeight:700,color:"#dc2626",flexShrink:0}}>{l.joursRetard}j</div>
                   {(l.clientWa||l.clientTel) && (
-                    <a href={`https://wa.me/${(l.clientWa||l.clientTel).replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer"
+                    <a href={`https://wa.me/${(l.clientWa||l.clientTel).replace(/\D/g,"")}?text=${encodeURIComponent(`Bonjour ${l.clientNom||""},\n\nNous vous rappelons que votre loyer du mois de ${l.mois} d'un montant de ${new Intl.NumberFormat("fr-CI").format(l.montant)} FCFA est en attente de règlement.\n\nMerci de régulariser votre situation dans les meilleurs délais.\n\nCordialement,\nImmobilierCI`)}`} target="_blank" rel="noopener noreferrer"
                       style={{fontSize:"11px",padding:"4px 8px",background:"#25D366",color:"white",borderRadius:"5px",textDecoration:"none",flexShrink:0}}>
-                      WA
+                      📲 Relancer
                     </a>
                   )}
                 </div>
@@ -593,6 +737,24 @@ export function AdminClients() {
             + {TYPE_CONFIG[onglet].icon} {TYPE_CONFIG[onglet].label}
           </button>
         )}
+        <button onClick={()=>exportExcel(
+          liste.map(c=>({
+            "Nom": c.nom||"",
+            "Type": c.type||"",
+            "Téléphone": c.tel||"",
+            "WhatsApp": c.whatsapp||"",
+            "Email": c.email||"",
+            "Bien": biens.find(b=>b.id===(c.bienId||c.bien_id))?.titre||"",
+            "Loyer (FCFA)": c.loyer||"",
+            "Caution (FCFA)": c.caution||"",
+            "Date entrée": c.dateEntree||c.date_entree||"",
+            "Profession": c.profession||"",
+            "Revenus (FCFA)": c.revenus||"",
+          })),
+          [], `clients_${onglet}`
+        )} style={{padding:"9px 16px",background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:"8px",cursor:"pointer",fontWeight:700,fontSize:"13px",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+          📊 Excel
+        </button>
       </div>
 
       {/* Liste */}
@@ -878,7 +1040,19 @@ export function AdminClients() {
             <Txta label="Observations" rows={2} value={etatLieux.observations} onChange={e=>setEtatLieux(p=>({...p,observations:e.target.value}))} placeholder="Dégradations, retenue sur caution..."/>
             <div style={{display:"flex",gap:"10px",justifyContent:"flex-end",borderTop:"1px solid var(--border)",paddingTop:"14px"}}>
               <button onClick={()=>setEtatLieuxModal(null)} style={{padding:"10px 20px",border:"1px solid var(--border)",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:600,background:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>Annuler</button>
-              <button onClick={()=>libererBien(etatLieuxModal,etatLieux)} style={{padding:"10px 20px",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,background:"#f59e0b",color:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>🔑 Confirmer</button>
+              <button onClick={()=>imprimerEtatDesLieux({client:etatLieuxModal,bien:biens.find(b=>b.id===(etatLieuxModal.bienId||etatLieuxModal.bien_id)),etat:etatLieux,type:"sortie"})}
+                style={{padding:"10px 20px",border:"1px solid #5c1a2b",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,background:"#fdf8f5",color:"#5c1a2b",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+                🖨️ État des lieux
+              </button>
+              <button onClick={()=>{
+                  imprimerEtatDesLieux({
+                    client:etatLieuxModal,
+                    bien:biens.find(b=>b.id===(etatLieuxModal.bienId||etatLieuxModal.bien_id)),
+                    etatLieux,
+                    type:"sortie"
+                  });
+                }} style={{padding:"10px 16px",border:"1px solid #5c1a2b",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,background:"#fdf8f5",color:"#5c1a2b",fontFamily:"Plus Jakarta Sans,sans-serif"}}>🖨️ État des lieux</button>
+                <button onClick={()=>libererBien(etatLieuxModal,etatLieux)} style={{padding:"10px 20px",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,background:"#f59e0b",color:"white",fontFamily:"Plus Jakarta Sans,sans-serif"}}>🔑 Confirmer</button>
             </div>
           </div>
         </Modal>
@@ -969,6 +1143,22 @@ export function AdminLoyers() {
           genererMoisLoyers(mois);
         }}>⚙️ Générer {mois}</Btn>}
         {peutEcrire&&<Btn variant="primary" size="sm" onClick={()=>{setF(empty);setModal(true);}}>+ Enregistrer</Btn>}
+        <button onClick={()=>exportExcel(
+          affichés.map(l=>({
+            "Mois": l.mois||"",
+            "Client": l.clientNom||"",
+            "Bien": l.bienTitre||"",
+            "Montant dû (FCFA)": l.montant||0,
+            "Montant reçu (FCFA)": l.montantRecu||0,
+            "Statut": l.statut||"",
+            "Date paiement": l.datePaiement||"",
+            "Mode paiement": l.modePaiement||"",
+            "Jours retard": l.joursRetard||0,
+          })),
+          [], `loyers_${mois}`
+        )} style={{padding:"6px 12px",background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:"8px",cursor:"pointer",fontWeight:700,fontSize:"12px",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+          📊 Excel
+        </button>
       </div>
     </div>
 
@@ -1259,6 +1449,21 @@ export function AdminVentes() {
         <button key={k} onClick={()=>setTab(k)} className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${tab===k?"bg-emerald-600 text-white border-emerald-600":"bg-white text-gray-600 border-gray-300"}`}>{l}</button>
       ))}
       {peutEcrire&&<Btn variant="primary" className="ml-auto" onClick={()=>{setF(emptyF);setModal("add");}}>+ Nouvelle vente</Btn>}
+        <button onClick={()=>exportExcel(
+          ventes.map(v=>({
+            "Client": v.acheteurNom||"",
+            "Bien": biens.find(b=>b.id===v.bienId)?.titre||"",
+            "Statut": TL[v.statut]||v.statut||"",
+            "Prix affiché (FCFA)": v.prixAffiche||0,
+            "Prix négocié (FCFA)": v.prixNegociation||0,
+            "Prix final (FCFA)": v.prixFinal||0,
+            "Notaire": v.notaire||"",
+            "Date acte": v.dateActe||"",
+          })),
+          [], "ventes"
+        )} style={{padding:"6px 12px",background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:"8px",cursor:"pointer",fontWeight:700,fontSize:"12px",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+          📊 Excel
+        </button>
     </div>
 
     {/* KPIs */}
