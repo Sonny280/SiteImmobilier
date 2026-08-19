@@ -3,10 +3,43 @@ import { useState, useEffect, useRef } from "react";
 import { useCtx } from "../context.jsx";
 import { AG } from "../utils.js";
 import { AdminDashboard, AdminBiens, AdminClients, AdminLoyers, AdminVentes, AdminDemandes, AdminVisites, AdminParams } from "../admin.jsx";
+import { AdminUsers, AdminMonProfil } from "../AdminUsers.jsx";
 import { AdminBlog } from "../AdminBlog.jsx";
 import { AdminTemoignages } from "../AdminTemoignages.jsx";
 import { AdminRealisations } from "../AdminRealisations.jsx";
 
+
+const DESKTOP = 768;
+
+// ── NOTIFY MODAL ───────────────────────────────────────────────
+let _notifyFn = null;
+export function notify(msg, type="error") {
+  if (_notifyFn) _notifyFn(msg, type);
+}
+function NotifyProvider({ children }) {
+  const [n, setN] = useState(null);
+  useEffect(() => { _notifyFn = (msg,type)=>setN({msg,type}); return ()=>{ _notifyFn=null; }; }, []);
+  const close = () => setN(null);
+  const icons = { error:"❌", warn:"⚠️", info:"ℹ️", success:"✅" };
+  const colors = {
+    error:  { bg:"#fef2f2", border:"#fecaca", title:"#dc2626", btn:"#dc2626" },
+    warn:   { bg:"#fffbeb", border:"#fde68a", title:"#92400e", btn:"#d97706" },
+    info:   { bg:"#eff6ff", border:"#bfdbfe", title:"#1d4ed8", btn:"#2563eb" },
+    success:{ bg:"#f0fdf4", border:"#bbf7d0", title:"#15803d", btn:"#16a34a" },
+  };
+  const c = colors[n?.type] || colors.error;
+  return (<>
+    {children}
+    {n && (<>
+      <div onClick={close} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",zIndex:9998}}/>
+      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:c.bg,border:`1px solid ${c.border}`,borderRadius:"18px",padding:"28px 32px",width:"360px",maxWidth:"90vw",zIndex:9999,boxShadow:"0 16px 48px rgba(0,0,0,0.18)",textAlign:"center"}}>
+        <div style={{fontSize:"40px",marginBottom:"12px"}}>{icons[n?.type]||"❌"}</div>
+        <p style={{fontSize:"14px",color:c.title,fontWeight:600,lineHeight:1.6,marginBottom:"20px",whiteSpace:"pre-line"}}>{n?.msg}</p>
+        <button onClick={close} style={{padding:"10px 28px",background:c.btn,color:"white",border:"none",borderRadius:"10px",cursor:"pointer",fontWeight:700,fontSize:"14px",fontFamily:"Plus Jakarta Sans,sans-serif"}}>OK</button>
+      </div>
+    </>)}
+  </>);
+}
 
 // ── Onglets regroupés en sections ────────────────────────────────
 // Réduction de 14 → 10 onglets visibles en condensant "Site vitrine"
@@ -256,7 +289,7 @@ function AdminLayout(){
   );
 
   return (
-    <>
+    <NotifyProvider>
     <div style={{ display:"flex", minHeight:"100vh", background:"var(--off)" }}>
 
       {/* ── Sidebar desktop (jamais affichée sur mobile) ── */}
@@ -430,9 +463,8 @@ function AdminLayout(){
         </div>
       </div>
     )}
-    </>
+    </NotifyProvider>
   );
 }
 
 export default AdminLayout;
-
