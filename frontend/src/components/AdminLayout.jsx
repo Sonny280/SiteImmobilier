@@ -432,7 +432,7 @@ function AdminLayout(){
         </div>
       </div>
     )}
-    </>
+    </NotifyProvider>
   );
 }
 
@@ -443,3 +443,4 @@ export function AdminCalculatrice({ biens, setPage }) {
   const { Calculatrice } = require("../Calculatrice.jsx");
   return <Calculatrice biens={biens} setPage={setPage}/>;
 }
+
