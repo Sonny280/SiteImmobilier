@@ -66,6 +66,13 @@ function imprimerEtatDesLieux({ client, bien, etatLieux, type="sortie" }) {
 
 // Imprimer état des lieux (entrée ou sortie)
 
+// Btn mini inline pour admin
+const Btn=({children,variant="primary",size="md",className="",...p})=>{
+  const V={primary:"btn btn-primary",outline:"btn btn-outline",danger:"btn btn-danger",ghost:"btn",amber:"btn",wa:"btn btn-wa",call:"btn btn-primary",orange:"btn btn-primary"};
+  const S={xs:"btn-sm",sm:"btn-sm",md:"",lg:"btn-lg",xl:"btn-lg"};
+  return <button className={`${V[variant]||"btn btn-primary"} ${S[size]||""} ${className}`} {...p}>{children}</button>;
+};
+
 export function AdminDashboard() {
   const {biens,clients,loyers,ventes,demandes,contrats,online} = useCtx();
   const [stats, setStats] = useState(null);
