@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useCtx } from "../context.jsx";
 import { AG } from "../utils.js";
-import { AdminDashboard, AdminBiens, AdminClients, AdminLoyers, AdminVentes, AdminDemandes, AdminVisites, AdminParams, NotifyProvider } from "../admin.jsx";
+import { AdminDashboard, AdminBiens, AdminClients, AdminLoyers, AdminVentes, AdminDemandes, AdminVisites, AdminParams } from "../admin.jsx";
 import { AdminBlog } from "../AdminBlog.jsx";
 
 
@@ -254,7 +254,7 @@ function AdminLayout(){
   );
 
   return (
-    <NotifyProvider>
+    <>
     <div style={{ display:"flex", minHeight:"100vh", background:"var(--off)" }}>
 
       {/* ── Sidebar desktop (jamais affichée sur mobile) ── */}
@@ -428,7 +428,6 @@ function AdminLayout(){
         </div>
       </div>
     )}
-    </NotifyProvider>
   );
 }
 
@@ -436,7 +435,6 @@ export default AdminLayout;
 
 // ── PAGE CALCULATRICE (proxy) ────────────────────────────────────
 export function AdminCalculatrice({ biens, setPage }) {
-  const { Calculatrice } = require("../Calculatrice.jsx");
+const { Calculatrice } = require("../Calculatrice.jsx");
   return <Calculatrice biens={biens} setPage={setPage}/>;
 }
-
