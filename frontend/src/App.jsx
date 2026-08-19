@@ -70,7 +70,7 @@ function WAFloat() {
 
 // ── Routeur ─────────────────────────────────────────────────────
 function Root() {
-  const { page, goTo, biens, user } = useCtx();
+  const { page, goTo, biens, user, authLoading } = useCtx();
   useScrollAnimations();
 
   const nav = (p) => { goTo(p); };
