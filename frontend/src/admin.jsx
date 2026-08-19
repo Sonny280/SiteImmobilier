@@ -67,6 +67,37 @@ function imprimerEtatDesLieux({ client, bien, etatLieux, type="sortie" }) {
 // Imprimer état des lieux (entrée ou sortie)
 
 // Btn mini inline pour admin
+// ── NOTIFY MODAL ─────────────────────────────────────────────
+let _notifyFn = null;
+function notify(msg, type="error") {
+  if (_notifyFn) _notifyFn(msg, type);
+  else console.warn("[notify]", msg);
+}
+export function NotifyProvider({ children }) {
+  const [n, setN] = useState(null);
+  useEffect(() => { _notifyFn = (msg,type)=>setN({msg,type}); return ()=>{ _notifyFn=null; }; }, []);
+  const close = () => setN(null);
+  const icons = { error:"❌", warn:"⚠️", info:"ℹ️", success:"✅" };
+  const colors = {
+    error:  { bg:"#fef2f2", border:"#fecaca", title:"#dc2626", btn:"#dc2626" },
+    warn:   { bg:"#fffbeb", border:"#fde68a", title:"#92400e", btn:"#d97706" },
+    info:   { bg:"#eff6ff", border:"#bfdbfe", title:"#1d4ed8", btn:"#2563eb" },
+    success:{ bg:"#f0fdf4", border:"#bbf7d0", title:"#15803d", btn:"#16a34a" },
+  };
+  const c = colors[n?.type] || colors.error;
+  return (<>
+    {children}
+    {n && (<>
+      <div onClick={close} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",zIndex:9998}}/>
+      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:c.bg,border:`1px solid ${c.border}`,borderRadius:"18px",padding:"28px 32px",width:"360px",maxWidth:"90vw",zIndex:9999,boxShadow:"0 16px 48px rgba(0,0,0,0.18)",textAlign:"center"}}>
+        <div style={{fontSize:"40px",marginBottom:"12px"}}>{icons[n?.type]||"❌"}</div>
+        <p style={{fontSize:"14px",color:c.title,fontWeight:600,lineHeight:1.6,marginBottom:"20px",whiteSpace:"pre-line"}}>{n?.msg}</p>
+        <button onClick={close} style={{padding:"10px 28px",background:c.btn,color:"white",border:"none",borderRadius:"10px",cursor:"pointer",fontWeight:700,fontSize:"14px",fontFamily:"Plus Jakarta Sans,sans-serif"}}>OK</button>
+      </div>
+    </>)}
+  </>);
+}
+
 const Btn=({children,variant="primary",size="md",className="",...p})=>{
   const V={primary:"btn btn-primary",outline:"btn btn-outline",danger:"btn btn-danger",ghost:"btn",amber:"btn",wa:"btn btn-wa",call:"btn btn-primary",orange:"btn btn-primary"};
   const S={xs:"btn-sm",sm:"btn-sm",md:"",lg:"btn-lg",xl:"btn-lg"};
@@ -2188,17 +2219,11 @@ export function AdminParams() {
     </div>
 
 
-    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-      <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4">Démarrage rapide</h3>
-      <div className="space-y-3">{[["1","Installer les dépendances","cd backend && npm install"],["2","Créer le compte administrateur","node seed.js  (ne crée que le compte admin, aucune fausse donnée)"],["3","Démarrer le backend","node server.js  →  http://localhost:3001"],["4","Démarrer le frontend","cd frontend && npm run dev  →  http://localhost:5173"],["5","Configurer les emails","Modifier backend/.env (SMTP_USER, SMTP_PASS Gmail)"]].map(([n,l,v])=>(
-        <div key={n} className="flex items-start gap-3"><div className="w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{n}</div><div><div className="text-sm font-medium text-gray-900">{l}</div><code className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-600 mt-0.5 block">{v}</code></div></div>
-      ))}</div>
-    </div>
+    
     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-800 space-y-2">
-      <p><strong>📷 Upload photos</strong> : Images converties en base64 dans le navigateur → envoyées au serveur. Compatible Windows/Mac/Linux.</p>
+      
       <p><strong>⏰ Retards</strong> : Le calcul des retards est informatif uniquement. Aucune pénalité automatique n'est appliquée.</p>
       <p><strong>📄 Contrats</strong> : Les alertes d'expiration apparaissent 60 jours avant la date de fin.</p>
     </div>
   </div>;
 }
-
